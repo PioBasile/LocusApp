@@ -29,3 +29,5 @@ services:
       DB_USER: user_go
       DB_PASSWORD: password_go
       DB_NAME: travelshare_db
+    volumes:
+      - ./uploads:/app/uploads

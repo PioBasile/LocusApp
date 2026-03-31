@@ -144,13 +144,12 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     // 3. Récupérer les champs TEXTE via FormValue (au lieu du JSON)
-    title := r.FormValue("title")
+    groupe := r.FormValue("groupe")
     description := r.FormValue("description")
 	locationID := r.FormValue("id_loc")
 
-    if title == "" {
-        http.Error(w, "Le titre est obligatoire", http.StatusBadRequest)
-        return
+    if groupe == "" {
+        groupe = "0" 
     }
 
     // 4. Récupérer le FICHIER image
@@ -173,9 +172,9 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 	fullImageURL := fmt.Sprintf("%s/uploads/posts/%s", BaseURL, imageName)
 
     // 6. Sauvegarder en Base de Données
-	query := `INSERT INTO Publications (id_publicateur, titre, description, url_image, id_localisation) 
+	query := `INSERT INTO Publications (id_publicateur, groupe, description, url_image, id_localisation) 
               VALUES ($1, $2, $3, $4, $5)`
-    _, err = db.Exec(query, userID, title, description, fullImageURL, locationID)
+    _, err = db.Exec(query, userID, groupe, description, fullImageURL, locationID)
 
     if err != nil {
         http.Error(w, "Erreur SQL lors de l'insertion", http.StatusInternalServerError)
