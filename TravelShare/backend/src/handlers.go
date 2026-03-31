@@ -206,14 +206,14 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
     var post struct {
         ID          int    `db:"id_pub" json:"id"`
         UserID      int    `db:"id_publicateur" json:"user_id"`
-        Title       string `db:"titre" json:"title"`
+        Groupe      int    `db:"groupe" json:"groupe"`
         Description string `db:"description" json:"description"`
         ImageURL    string `db:"url_image" json:"image_url"`
         Date        string `db:"date" json:"date"`
         LocID       *int   `db:"id_localisation" json:"id_loc"` 
     }
 
-    query := `SELECT id_pub, id_publicateur, titre, description, url_image, date, id_localisation 
+    query := `SELECT id_pub, id_publicateur, groupe, description, url_image, date, id_localisation 
               FROM Publications WHERE id_pub = $1`
     
     err := db.Get(&post, query, postID)
