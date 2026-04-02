@@ -1,0 +1,375 @@
+package com.example.locus.ui.screens
+
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.locus.ui.components.BottomNav
+import com.example.locus.ui.components.NavDestination
+import com.example.locus.ui.components.Topbar
+import com.example.locus.ui.theme.*
+import com.example.locus.viewmodel.AddPostViewModel
+import java.io.File
+import java.io.FileOutputStream
+
+@Composable
+fun AddPostScreen(
+    onNavigate: (NavDestination) -> Unit = {},
+    viewModel: AddPostViewModel = viewModel(),
+    token: String = ""
+) {
+    val context = LocalContext.current
+    var caption by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var groupExpanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val groups = listOf("Hiking", "City Trips", "Road Trips", "Beach", "Family", "Solo")
+
+    // Mapping temporaire pour simuler les IDs de groupe
+    val groupIds = mapOf("Hiking" to 1, "City Trips" to 2, "Road Trips" to 3, "Beach" to 4, "Family" to 5, "Solo" to 6)
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> imageUri = uri }
+
+    // Observers pour les retours du ViewModel
+    LaunchedEffect(viewModel.successMessage) {
+        viewModel.successMessage?.let {
+            Toast.makeText(context, "Post partagé avec succès !", Toast.LENGTH_SHORT).show()
+            onNavigate(NavDestination.EXPLORE) // Ou HOME selon ton app
+            viewModel.clearMessages()
+        }
+    }
+
+    LaunchedEffect(viewModel.errorMessage) {
+        viewModel.errorMessage?.let {
+            Toast.makeText(context, "Erreur : $it", Toast.LENGTH_SHORT).show()
+            viewModel.clearMessages()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(OffWhite)
+    ) {
+        Topbar()
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+        ) {
+
+            // -- Photo hero ----------
+            Button(
+                onClick = { imagePicker.launch("image/*") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                shape = RoundedCornerShape(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NavyDark,
+                    contentColor = White
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (imageUri != null) {
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Selected photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, NavyDark.copy(alpha = 0.6f)),
+                                        startY = 150f
+                                    )
+                                )
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(NavyDark.copy(alpha = 0.7f))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Change",
+                                color = White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AddPhotoAlternate,
+                                contentDescription = "Add photo",
+                                tint = White.copy(alpha = 0.4f),
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Text(
+                                text = "Tap to select a photo",
+                                color = White.copy(alpha = 0.5f),
+                                fontSize = 14.sp,
+                                fontStyle = FontStyle.Italic
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // -- Form fields ---------------------------------------
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                JournalField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    label = "Caption",
+                    placeholder = "What's the story?",
+                    maxLines = 3
+                )
+
+                JournalField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = "Location",
+                    placeholder = "Where was this?",
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            tint = GoldPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+
+                // -- Group dropdown --------------------------------
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "GROUP",
+                        color = NavyDark.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp
+                    )
+                    Box {
+                        OutlinedTextField(
+                            value = selectedGroup.ifBlank { "Select a group" },
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { groupExpanded = true }) {
+                                    Icon(
+                                        Icons.Filled.ArrowDropDown,
+                                        contentDescription = "Expand",
+                                        tint = NavyDark
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = White,
+                                focusedContainerColor = White,
+                                unfocusedBorderColor = InputBorder,
+                                focusedBorderColor = NavyDark,
+                                unfocusedTextColor = if (selectedGroup.isBlank()) InputHint else NavyDark,
+                                focusedTextColor = NavyDark,
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        // Transparent overlay button to capture taps on the field
+                        Button(
+                            onClick = { groupExpanded = true },
+                            modifier = Modifier
+                                .matchParentSize(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = Color.Transparent
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(0.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {}
+
+                        DropdownMenu(
+                            expanded = groupExpanded,
+                            onDismissRequest = { groupExpanded = false },
+                            modifier = Modifier.background(White)
+                        ) {
+                            groups.forEach { group ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(text = group, color = NavyDark, fontSize = 14.sp)
+                                    },
+                                    onClick = {
+                                        selectedGroup = group
+                                        groupExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        imageUri?.let { uri ->
+                            val imageFile = getFileFromUri(context, uri)
+                            val groupId = groupIds[selectedGroup] ?: 0 // Récupère l'ID du groupe ou 0
+
+                            if (imageFile != null) {
+                                viewModel.uploadPost(token, imageFile, caption, groupId, locationId = 1)
+                            } else {
+                                Toast.makeText(context, "Erreur avec l'image", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = imageUri != null && caption.isNotBlank() && !viewModel.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NavyDark,
+                        contentColor = White,
+                        disabledContainerColor = NavyDark.copy(alpha = 0.3f),
+                        disabledContentColor = White.copy(alpha = 0.5f)
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                ) {
+                    if (viewModel.isLoading) {
+                        CircularProgressIndicator(color = White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Share Moment",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        BottomNav(
+            selected = NavDestination.ADD, // Assure-toi que ADD existe dans ton enum
+            onSelect = onNavigate
+        )
+    }
+}
+
+@Composable
+private fun JournalField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    maxLines: Int = 1,
+    leadingIcon: @Composable (() -> Unit)? = null
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = label.uppercase(),
+            color = NavyDark.copy(alpha = 0.5f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.sp
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    color = InputHint,
+                    fontSize = 14.sp,
+                    fontStyle = FontStyle.Italic
+                )
+            },
+            maxLines = maxLines,
+            shape = RoundedCornerShape(12.dp),
+            leadingIcon = leadingIcon,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = White,
+                focusedContainerColor = White,
+                unfocusedBorderColor = InputBorder,
+                focusedBorderColor = NavyDark,
+                cursorColor = NavyDark,
+                unfocusedTextColor = NavyDark,
+                focusedTextColor = NavyDark,
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+fun getFileFromUri(context: Context, uri: Uri): File? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+        val tempFile = File.createTempFile("upload_", ".jpg", context.cacheDir)
+        val outputStream = FileOutputStream(tempFile)
+        inputStream.copyTo(outputStream)
+        inputStream.close()
+        outputStream.close()
+        tempFile
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
