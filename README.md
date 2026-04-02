@@ -20,14 +20,19 @@
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="images/2.png?raw=true" width="350" alt="Screenshot 2">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</p>
+
+<br>
+
+<p align = "center">
   <img src="images/3.png?raw=true" width="350" alt="Screenshot 3"> 
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="images/4.png?raw=true" width="350" alt="Screenshot 4">
 </p>
 
 <br>
 
 <p align="center">
-  <img src="images/4.png?raw=true" width="350" alt="Screenshot 4">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="images/5.png?raw=true" width="350" alt="Screenshot 5">
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <img src="images/6.png?raw=true" width="350" alt="Screenshot 6"> 
