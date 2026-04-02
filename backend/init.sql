@@ -1,6 +1,6 @@
 -- Groupes FIRST since Publications references it
 CREATE TABLE Groupes (
-    id_com SERIAL PRIMARY KEY,
+    id_grp SERIAL PRIMARY KEY,
     nom VARCHAR(255) NOT NULL,
     description TEXT
 );
@@ -25,7 +25,7 @@ CREATE TABLE Localisation (
 CREATE TABLE Publications (
     id_pub SERIAL PRIMARY KEY,
     id_publicateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
-    groupes INT REFERENCES Groupes(id_com) ON DELETE SET NULL,
+    groupe INT REFERENCES Groupes(id_grp) ON DELETE SET NULL,
     description TEXT,
     id_localisation INT REFERENCES Localisation(id_loc),
     url_image TEXT NOT NULL,
