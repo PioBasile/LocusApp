@@ -13,7 +13,7 @@
 * **Partage Instantané :** Publiez vos meilleurs clichés et épinglez-les directement sur la carte avec votre position exacte.
 * **Réseau Social :** Interagissez avec les publications des autres utilisateurs et suivez vos amis pour ne rien manquer de leurs découvertes.
 
-## 📱 Aperçu de l'Application
+## Aperçu de l'Application
 
 <p align="center">
   <img src="images/1.png?raw=true" width="350" alt="Screenshot 1">
