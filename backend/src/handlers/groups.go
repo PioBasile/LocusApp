@@ -71,3 +71,32 @@ func GetGroupsHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(groups)
 }
+
+
+func JoinGroupHandler(w http.ResponseWriter, r *http.Request) {
+	groupID := r.FormValue("group_id")
+	password := r.FormValue("password")
+	userID := r.Context().Value(UserIDKey).(int)
+
+	var isPrivate bool
+	var groupPassword sql.NullString
+	err := db.QueryRow("SELECT is_private, password FROM Groupes WHERE id_grp = $1", groupID).Scan(&isPrivate, &groupPassword)
+	if err != nil {
+		http.Error(w, "Groupe introuvable", http.StatusNotFound)
+		return
+	}
+
+	if isPrivate && (!groupPassword.Valid || groupPassword.String != password) {
+		http.Error(w, "Mot de passe incorrect pour ce groupe privé", http.StatusUnauthorized)
+		return
+	}
+
+	_, err = db.Exec("INSERT INTO MembreGroupes (id_grp, usr_id) VALUES ($1, $2)", groupID, userID)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'adhésion au groupe (déjà membre ?)", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Adhésion au groupe réussie !"})
+}

@@ -20,7 +20,7 @@ func IsAuthorized(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if config.DEBUG == "true" && tokenString == "debug" {
-            ctx := context.WithValue(r.Context(), UserIDKey, 1)
+            ctx := context.WithValue(r.Context(), UserIDKey, 0)
             next(w, r.WithContext(ctx))
             return
         }

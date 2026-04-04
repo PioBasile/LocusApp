@@ -8,8 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
+	"strconv"
 	"backend/lib"
+	"time"
 )
 
 // MakePostHandler creates a new post with image and text content
@@ -29,8 +30,19 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 	description := r.FormValue("description")
 	locationID := r.FormValue("id_loc")
 
+	groupIDInt, err := strconv.Atoi(groupe)
+	if err != nil {
+    	http.Error(w, "ID de groupe invalide", http.StatusBadRequest)
+    	return
+	}
+
 	if groupe == "" {
 		groupe = "0"
+	} else {
+		if !IsMemberOfGroup(userID, groupIDInt) {
+			http.Error(w, "Accès refusé : vous n'êtes pas membre du groupe de ce post", http.StatusForbidden)
+			return
+		}
 	}
 
 	// 4. Extract and process image file
@@ -74,6 +86,8 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetPostHandler retrieves a specific post by ID
 func GetPostHandler(w http.ResponseWriter, r *http.Request) {
+
+	fmt.Println("GetPostHandler appelé")
 	postID := r.URL.Query().Get("id")
 	if postID == "" {
 		http.Error(w, "ID du post manquant", http.StatusBadRequest)
@@ -81,20 +95,21 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var post struct {
-		ID          int    `db:"id_pub" json:"id"`
-		UserID      int    `db:"id_publicateur" json:"user_id"`
-		Groupe      int    `db:"groupe" json:"groupe"`
-		Description string `db:"description" json:"description"`
-		ImageURL    string `db:"url_image" json:"image_url"`
-		Date        string `db:"date" json:"date"`
-		LocID       *int   `db:"id_localisation" json:"id_loc"`
-	}
+    ID          int     `db:"id_pub" json:"id"`
+    UserID      int     `db:"id_publicateur" json:"user_id"`
+    Groupe      int     `db:"groupe" json:"groupe"`
+    Description string  `db:"description" json:"description"`
+    ImageURL    string  `db:"url_image" json:"image_url"`
+    Date        time.Time  `db:"date" json:"date"`
+    LocID       *int    `db:"id_localisation" json:"id_loc"`
+}
 
 	query := `SELECT id_pub, id_publicateur, groupe, description, url_image, date, id_localisation 
               FROM Publications WHERE id_pub = $1`
 
 	err := db.Get(&post, query, postID)
 	if err != nil {
+		fmt.Println("GetPostHandler erreur db.Get:", err)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Post introuvable", http.StatusNotFound)
 		} else {
@@ -102,6 +117,20 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	tokenString := r.Header.Get("Authorization")
+    if tokenString != "" {
+        userID := getUserIDFromToken(tokenString)
+        if !IsMemberOfGroup(userID, post.Groupe) {
+            http.Error(w, "Accès refusé", http.StatusForbidden)
+            return
+        }
+    } else {
+        if !IsMemberOfGroup(-1, post.Groupe) {
+            http.Error(w, "Accès refusé", http.StatusForbidden)
+            return
+        }
+    }
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(post)
@@ -111,6 +140,17 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
 func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
 	groupID := r.URL.Query().Get("groupe")
 
+	groupIDInt, err := strconv.Atoi(groupID)
+	if err != nil {
+    	http.Error(w, "ID de groupe invalide", http.StatusBadRequest)
+    	return
+	}
+
+	if !IsMemberOfGroup(r.Context().Value(UserIDKey).(int), groupIDInt) {
+		http.Error(w, "Accès refusé : vous n'êtes pas membre du groupe demandé", http.StatusForbidden)
+		return
+	}
+
 	if groupID == "" {
 		http.Error(w, "ID du groupe manquant", http.StatusBadRequest)
 		return
@@ -119,7 +159,7 @@ func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
 	var posts []lib.PostResponse
 	query := `SELECT id_pub, id_publicateur, groupe, description, url_image, date, id_localisation
 			FROM Publications WHERE groupe = $1`
-	err := db.Select(&posts, query, groupID)
+	err = db.Select(&posts, query, groupID)
 	if err != nil {
     	fmt.Println("Erreur getPostsByGroup:", err) 
     	http.Error(w, "Erreur serveur", http.StatusInternalServerError)

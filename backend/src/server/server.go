@@ -24,6 +24,7 @@ func setupRoutes() {
 	http.HandleFunc("/profile", handlers.IsAuthorized(handlers.GetProfileHandler))
 	http.HandleFunc("/getPostsByGroup", handlers.IsAuthorized(handlers.GetPostPerGroupHandler))
 	http.HandleFunc("/makeGroup", handlers.IsAuthorized(handlers.MakeGroupHandler))
+	http.HandleFunc("/joinGroup", handlers.IsAuthorized(handlers.JoinGroupHandler))
 }
 
 // setupFileServer configures static file serving for uploads
