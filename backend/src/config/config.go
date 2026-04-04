@@ -11,6 +11,9 @@ var (
 	DBPort     = getEnv("DB_PORT", "5432")
 )
 
+// A changer pour déployer
+var DEBUG = "true"
+
 // Server configuration
 const (
 	ServerHost = "0.0.0.0"

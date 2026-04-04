@@ -10,18 +10,12 @@ import (
 	"path/filepath"
 
 	"backend/lib"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // MakePostHandler creates a new post with image and text content
 func MakePostHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Extract user ID from JWT token
-	tokenString := r.Header.Get("Authorization")
-	token, _ := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-	claims, _ := token.Claims.(jwt.MapClaims)
-	userID := int(claims["user_id"].(float64))
+	
+	userID := r.Context().Value(UserIDKey).(int)
 
 	// 2. Parse multipart form (image + text fields)
 	err := r.ParseMultipartForm(10 << 20) // 10 MB limit
@@ -127,9 +121,10 @@ func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
 			FROM Publications WHERE groupe = $1`
 	err := db.Select(&posts, query, groupID)
 	if err != nil {
-		http.Error(w, "Erreur serveur", http.StatusInternalServerError)
-		return
-	}
+    	fmt.Println("Erreur getPostsByGroup:", err) 
+    	http.Error(w, "Erreur serveur", http.StatusInternalServerError)
+    return
+}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)

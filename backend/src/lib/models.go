@@ -23,11 +23,13 @@ type LoginResponse struct {
 
 // PostResponse represents a post in responses
 type PostResponse struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	ImageURL    string `json:"image_url"`
-	Message     string `json:"message"`
+    ID          int            `db:"id_pub" json:"id"`
+    UserID      int            `db:"id_publicateur" json:"user_id"`
+    Groupe      int            `db:"groupe" json:"groupe"`
+    Description string         `db:"description" json:"description"`
+    ImageURL    string         `db:"url_image" json:"image_url"`
+    Date        string         `db:"date" json:"date"`
+    LocID       *int           `db:"id_localisation" json:"id_loc"`
 }
 
 // Location represents a geographic location

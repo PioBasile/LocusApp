@@ -17,11 +17,13 @@ func setupRoutes() {
 	http.HandleFunc("/getpost", handlers.GetPostHandler)
 	http.HandleFunc("/getPublicProfile", handlers.GetPublicProfileHandler)
 	http.HandleFunc("/getLocations", handlers.GetLocalisationHandler)
+	http.HandleFunc("/getGroups", handlers.GetGroupsHandler)
 
 	// Protected routes
 	http.HandleFunc("/makepost", handlers.IsAuthorized(handlers.MakePostHandler))
 	http.HandleFunc("/profile", handlers.IsAuthorized(handlers.GetProfileHandler))
 	http.HandleFunc("/getPostsByGroup", handlers.IsAuthorized(handlers.GetPostPerGroupHandler))
+	http.HandleFunc("/makeGroup", handlers.IsAuthorized(handlers.MakeGroupHandler))
 }
 
 // setupFileServer configures static file serving for uploads
