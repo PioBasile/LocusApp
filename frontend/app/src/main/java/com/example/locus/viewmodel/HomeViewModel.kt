@@ -5,12 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.locus.data.repository.FeedPost
+import com.example.locus.data.model.Post
 import com.example.locus.data.repository.PostRepository
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
-    val posts: List<FeedPost> = emptyList(),
+    val posts: List<Post> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val selectedGroupId: Int = 0  // default group

@@ -45,7 +45,7 @@ interface ApiService {
 
     // -- Locations (public) ----------------------------------------
     @GET("/getLocations")
-    suspend fun getLocations(): List<LocationResponse>
+    suspend fun getLocation(@Query("id") locId: Int): LocationResponse
 
     // -- Groups (public) -------------------------------------------
     @GET("/getGroups")

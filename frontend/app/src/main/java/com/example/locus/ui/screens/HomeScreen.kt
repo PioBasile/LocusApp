@@ -29,9 +29,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.locus.R
-import com.example.locus.data.repository.FeedPost
+import com.example.locus.data.model.Post
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
+import com.example.locus.ui.components.Postcard
 import com.example.locus.ui.components.Topbar
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.HomeViewModel
@@ -58,10 +59,10 @@ fun HomeScreen(
             .fillMaxSize()
             .background(OffWhite)
     ) {
-        // ── Top bar ───────────────────────────────────────────────
+        // -- Top bar -----------------------------------------------
         Topbar()
 
-        // ── Feed ──────────────────────────────────────────────────
+        // -- Feed --------------------------------------------------
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -115,7 +116,7 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No posts yet — be the first to share!",
+                            text = "No posts yet - be the first to share!",
                             color = MediumGray,
                             fontSize = 14.sp,
                             fontStyle = FontStyle.Italic
@@ -124,13 +125,13 @@ fun HomeScreen(
                 }
                 else -> {
                     uiState.posts.forEach { post ->
-                        FeedPostCard(post = post)
+                        Postcard(post = post)
                     }
                 }
             }
         }
 
-        // ── Bottom nav ────────────────────────────────────────────
+        // -- Bottom nav --------------------------------------------
         BottomNav(
             selected = NavDestination.HOME,
             onSelect = onNavigate
@@ -138,7 +139,7 @@ fun HomeScreen(
     }
 }
 
-// ── Guest banner ──────────────────────────────────────────────────────────────
+// -- Guest banner --------------------------------------------------------------
 @Composable
 private fun GuestBanner() {
     Box(
@@ -164,135 +165,3 @@ private fun GuestBanner() {
     }
 }
 
-// ── Feed post card ────────────────────────────────────────────────────────────
-@Composable
-private fun FeedPostCard(post: FeedPost) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = NavyDark),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column {
-            // ── Header ────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(GoldPrimary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "U${post.userId}",
-                        color = White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "User ${post.userId}",
-                        color = White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = post.date.take(10), // show just the date part
-                        color = White.copy(alpha = 0.6f),
-                        fontSize = 11.sp
-                    )
-                }
-
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "More",
-                        tint = White.copy(alpha = 0.7f)
-                    )
-                }
-            }
-
-            // ── Image ─────────────────────────────────────────────
-            AsyncImage(
-                model = post.imageUrl,
-                contentDescription = "Post image",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-            )
-
-            // ── Actions ───────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Filled.FavoriteBorder, contentDescription = "Like", tint = White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "0", color = White, fontSize = 12.sp)
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Comment", tint = White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "0", color = White, fontSize = 12.sp)
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Icon(Icons.Filled.Reply, contentDescription = "Share", tint = White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "0", color = White, fontSize = 12.sp)
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                if (post.idLoc != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(
-                                color = White.copy(alpha = 0.08f),
-                                shape = RoundedCornerShape(20.dp)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.LocationOn,
-                            contentDescription = null,
-                            tint = GoldPrimary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Location",
-                            color = White,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-
-            // ── Caption ───────────────────────────────────────────
-            if (post.description.isNotBlank()) {
-                Text(
-                    text = post.description,
-                    color = White.copy(alpha = 0.8f),
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-                )
-            }
-        }
-    }
-}

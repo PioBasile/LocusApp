@@ -8,6 +8,9 @@ data class Post(
     @SerializedName("user_id")
     val userId: Int,
 
+    @SerializedName("username")
+    val username: String,
+
     @SerializedName("groupe")
     val groupe: Int,
 
@@ -21,5 +24,8 @@ data class Post(
     val date: String,
 
     @SerializedName("id_loc")
-    val idLoc: Int?
+    val idLoc: Int?,
+
+    @SerializedName("location_name")
+    val locationName: String?
 )
