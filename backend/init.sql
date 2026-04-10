@@ -14,7 +14,8 @@ CREATE TABLE Groupes (
     is_private BOOLEAN DEFAULT FALSE,
     password TEXT,
     owner_id INT REFERENCES Utilisateurs(usr_id) ON DELETE SET NULL,
-    description TEXT
+    description TEXT,
+    url_image TEXT
 );
 
 
@@ -35,11 +36,17 @@ CREATE TABLE Localisation (
 CREATE TABLE Publications (
     id_pub SERIAL PRIMARY KEY,
     id_publicateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
-    groupe INT REFERENCES Groupes(id_grp) ON DELETE SET NULL,
     description TEXT,
     id_localisation INT REFERENCES Localisation(id_loc),
     url_image TEXT NOT NULL,
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE PublicationGroupe (
+    id_pub INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
+    id_grp INT REFERENCES Groupes(id_grp) ON DELETE CASCADE,
+    PRIMARY KEY (id_pub, id_grp)
 );
 
 CREATE TABLE Commentaires (
@@ -53,6 +60,12 @@ CREATE TABLE Likes (
     id_publication INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
     id_utilisateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
     PRIMARY KEY (id_publication, id_utilisateur)
+);
+
+CREATE TABLE Followers (
+    follower_id INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    followed_id INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    PRIMARY KEY (follower_id, followed_id)
 );
 
 INSERT INTO Localisation (nom, gps) VALUES ('Debug', '(43.6107, 3.8767)');

@@ -25,7 +25,7 @@ type LoginResponse struct {
 type PostResponse struct {
     ID          int            `db:"id_pub" json:"id"`
     UserID      int            `db:"id_publicateur" json:"user_id"`
-    Groupe      int            `db:"groupe" json:"groupe"`
+    Groupes      []int            `db:"groupe" json:"groupe"`
     Description string         `db:"description" json:"description"`
     ImageURL    string         `db:"url_image" json:"image_url"`
     Date        string         `db:"date" json:"date"`

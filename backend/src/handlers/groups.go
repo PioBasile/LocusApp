@@ -4,6 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"backend/lib"
+	"path/filepath"
+	"os"
+	"fmt"
 )
 func MakeGroupHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -12,6 +16,7 @@ func MakeGroupHandler(w http.ResponseWriter, r *http.Request) {
 	is_private := r.FormValue("is_private")
 	password := r.FormValue("password")
 	description := r.FormValue("description")
+	file, handler, err := r.FormFile("image")
 	
 	if groupe == "" {
 		http.Error(w, "Le nom du groupe est requis", http.StatusBadRequest)
@@ -23,12 +28,33 @@ func MakeGroupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err != nil {
+		http.Error(w, "Image manquante", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	imageName := lib.GenerateNewUUID() + filepath.Ext(handler.Filename)
+	dst, err := os.Create("./uploads/groupes_pic/" + imageName)
+	if err != nil {
+		http.Error(w, "Erreur lors de la création du fichier", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := dst.ReadFrom(file); err != nil {
+		http.Error(w, "Erreur lors de l'enregistrement de l'image", http.StatusInternalServerError)
+		return
+	}
+
+	fullImageURL := fmt.Sprintf("%s/uploads/groupes_pic/%s", BaseURL, imageName)
+
 	userID := r.Context().Value(UserIDKey).(int)
 
 	var groupID int
-	err := db.QueryRow(
-		"INSERT INTO Groupes (nom, is_private, password, owner_id, description) VALUES ($1, $2, $3, $4, $5) RETURNING id_grp",
-		groupe, is_private == "true", password, userID, description,
+	err = db.QueryRow(
+		"INSERT INTO Groupes (nom, is_private, password, owner_id, description, url_image) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id_grp",
+		groupe, is_private == "true", password, userID, description, fullImageURL,
 	).Scan(&groupID)
 
 	if err != nil {
@@ -100,3 +126,19 @@ func JoinGroupHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Adhésion au groupe réussie !"})
 }
+
+
+func addPostToGroupHandler(w http.ResponseWriter, r *http.Request) {
+	postID := r.FormValue("post_id")
+	groupID := r.FormValue("group_id")
+
+	_, err := db.Exec("UPDATE Publications SET groupe = $1 WHERE id_pub = $2", groupID, postID)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'ajout du post au groupe", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Post ajouté au groupe avec succès !"})
+}
+
