@@ -16,6 +16,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    privileged: true        
+    security_opt:
+      - no-new-privileges
 
   api:
     build: .
@@ -32,3 +35,6 @@ services:
       DB_NAME: travelshare_db
     volumes:
       - ./uploads:/app/uploads
+    privileged: true       
+    security_opt:
+      - no-new-privileges
