@@ -28,6 +28,7 @@ import com.example.locus.ui.theme.*
 fun LoginScreen(
     onLoginClick: (email: String, password: String) -> Unit = { _, _ -> },
     onGuestClick: () -> Unit = {},
+    onSignupClick: () -> Unit = {},
     isLoading: Boolean = false,
     errorMessage: String? = null
 ) {
@@ -123,12 +124,26 @@ fun LoginScreen(
                     )
                 } else {
                     Text(
-                        text = "Login / Sign Up",
+                        text = "Login",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         letterSpacing = 0.3.sp
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // -- Signup link ---------------------------------------
+
+            TextButton(onClick = onSignupClick) {
+                Text(
+                    text = "New here? Create an account",
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = GoldPrimary
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

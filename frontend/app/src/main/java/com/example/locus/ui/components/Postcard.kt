@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -15,18 +16,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.locus.data.model.Post
 import com.example.locus.ui.theme.*
+import com.example.locus.utils.formatTimeAgo
 
 @Composable
 fun Postcard(post: Post) {
-    // Key on post.id so state is stable across recompositions
     key(post.id) {
         PostCardContent(post = post)
     }
@@ -34,14 +39,16 @@ fun Postcard(post: Post) {
 
 @Composable
 private fun PostCardContent(post: Post) {
-    // Variables par défaut pour l'UI en attendant que ton backend fournisse ces infos
-    val authorName = "User ${post.userId}"
-    val authorAvatarUrl = "https://picsum.photos/seed/${post.userId}/100/100" // Image random basée sur l'ID
-    val locationName = if (post.idLoc != null) "Loc ${post.idLoc}" else "Unknown"
+    val authorName = post.username ?: "Unknown"
+    val authorAvatarUrl = "https://picsum.photos/seed/${post.userId}/100/100"
+    val locationName = post.locationName ?: "Unknown"
+    val imageCount = 1
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = NavyDark),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -51,7 +58,7 @@ private fun PostCardContent(post: Post) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
@@ -59,7 +66,7 @@ private fun PostCardContent(post: Post) {
                     contentDescription = "Avatar",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(GoldPrimary)
                 )
@@ -70,137 +77,157 @@ private fun PostCardContent(post: Post) {
                     Text(
                         text = authorName,
                         color = White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
                     )
                     Text(
-                        text = post.date, // Remplacement de timeAgo par date
+                        text = formatTimeAgo(post.date),
                         color = White.copy(alpha = 0.6f),
-                        fontSize = 11.sp
+                        fontSize = 12.sp
                     )
                 }
 
-                IconButton(onClick = {}) {
+                IconButton(
+                    onClick = {},
+                    modifier = Modifier.size(24.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "More",
-                        tint = White.copy(alpha = 0.7f)
+                        tint = GoldPrimary
                     )
                 }
             }
 
-            // -- Image unique (Pager retiré car une seule imageUrl) ---
+            // -- Image -------
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .padding(horizontal = 12.dp)
             ) {
                 AsyncImage(
-                    model = post.imageUrl, // Remplacement de images par imageUrl
+                    model = post.imageUrl,
                     contentDescription = "Post image",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .clip(RoundedCornerShape(12.dp))
                 )
+
+                if (imageCount > 1) {
+                    // Badge "1/X"
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "1/$imageCount",
+                            color = White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    // Points de pagination 
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        repeat(imageCount) { index ->
+                            val isSelected = index == 0
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) GoldPrimary else White.copy(alpha = 0.6f))
+                            )
+                        }
+                    }
+                }
             }
 
             // -- Actions row ---------------------------------------
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                PostActionItem(
-                    icon = {
-                        Icon(
-                            Icons.Filled.FavoriteBorder,
-                            contentDescription = "Like",
-                            tint = White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    count = 0 // Forcé à 0 pour le moment
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                PostActionItem(
-                    icon = {
-                        Icon(
-                            Icons.Filled.ChatBubbleOutline,
-                            contentDescription = "Comment",
-                            tint = White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    count = 0 // Forcé à 0 pour le moment
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                PostActionItem(
-                    icon = {
-                        Icon(
-                            Icons.Filled.BookmarkBorder,
-                            contentDescription = "Bookmark",
-                            tint = White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    count = 0 // Forcé à 0 pour le moment
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
+                // Actions de gauche (Like, Comment, Save)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    PostActionItem(
+                        icon = { Icon(Icons.Filled.FavoriteBorder, contentDescription = "Like", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
+                        count = 676
+                    )
+                    PostActionItem(
+                        icon = { Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Comment", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
+                        count = 676
+                    )
+                    PostActionItem(
+                        icon = { Icon(Icons.Filled.BookmarkBorder, contentDescription = "Bookmark", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
+                        count = 676
+                    )
+                }
 
                 // Location chip
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .background(
-                            color = White.copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(20.dp)
+                            color = White.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(16.dp)
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Icon(
-                        Icons.Filled.LocationOn,
+                        imageVector = Icons.Filled.LocationOn,
                         contentDescription = null,
                         tint = GoldPrimary,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = locationName, // Utilise l'ID de localisation temporairement
+                        text = locationName,
                         color = White,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = ">",
-                        color = White.copy(alpha = 0.5f),
-                        fontSize = 11.sp
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = GoldPrimary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
 
-            // -- Caption -------------------------------------------
-            Row(
+            // -- Caption
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = White)) {
+                        append("$authorName : ")
+                    }
+                    withStyle(style = SpanStyle(color = White.copy(alpha = 0.9f))) {
+                        append(post.description)
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-            ) {
-                Text(
-                    text = "$authorName : ",
-                    color = White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-                Text(
-                    text = post.description, // Remplacement de caption par description
-                    color = White.copy(alpha = 0.8f),
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+                    .padding(horizontal = 14.dp)
+                    .padding(bottom = 16.dp),
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -209,11 +236,12 @@ private fun PostCardContent(post: Post) {
 private fun PostActionItem(icon: @Composable () -> Unit, count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         icon()
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = count.toString(),
             color = White,
-            fontSize = 12.sp
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
