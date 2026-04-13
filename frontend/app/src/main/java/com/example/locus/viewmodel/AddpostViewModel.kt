@@ -21,7 +21,7 @@ class AddPostViewModel(
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
-    fun uploadPost(token: String, imageFile: File, description: String, groupId: Int, locationId: Int) {
+    fun uploadPost(token: String, imageFile: File, description: String, groupIds: List<Int>, locationId: Int) {
         viewModelScope.launch {
             isLoading = true
             successMessage = null
@@ -29,8 +29,8 @@ class AddPostViewModel(
 
             try {
                 // Appel au repository
-                val result = repository.uploadPost(token, imageFile, description, groupId, locationId)
-                successMessage = result // "Post créé avec succès !" (venant du backend)
+                val result = repository.uploadPost(token, imageFile, description, groupIds, locationId)
+                successMessage = result
             } catch (e: Exception) {
                 errorMessage = "Erreur de connexion : ${e.localizedMessage}"
                 e.printStackTrace()

@@ -48,12 +48,13 @@ fun AddPostScreen(
     var location by remember { mutableStateOf("") }
     var selectedGroup by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var groupExpanded by remember { mutableStateOf(false) }
+    var selectedGroups by remember { mutableStateOf(setOf<String>()) }
     val scrollState = rememberScrollState()
     val groups = listOf("Hiking", "City Trips", "Road Trips", "Beach", "Family", "Solo")
 
     // Mapping temporaire pour simuler les IDs de groupe
     val groupIds = mapOf("Hiking" to 1, "City Trips" to 2, "Road Trips" to 3, "Beach" to 4, "Family" to 5, "Solo" to 6)
+    var showGroupDialog by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -198,21 +199,27 @@ fun AddPostScreen(
                 // -- Group dropdown --------------------------------
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "GROUP",
+                        text = "GROUPS",
                         color = NavyDark.copy(alpha = 0.5f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp
                     )
                     Box {
+                        val groupDisplayText = if (selectedGroups.isEmpty()) {
+                            "Select groups"
+                        } else {
+                            selectedGroups.joinToString(", ")
+                        }
+
                         OutlinedTextField(
-                            value = selectedGroup.ifBlank { "Select a group" },
+                            value = groupDisplayText,
                             onValueChange = {},
                             readOnly = true,
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             trailingIcon = {
-                                IconButton(onClick = { groupExpanded = true }) {
+                                IconButton(onClick = { showGroupDialog = true }) {
                                     Icon(
                                         Icons.Filled.ArrowDropDown,
                                         contentDescription = "Expand",
@@ -225,16 +232,15 @@ fun AddPostScreen(
                                 focusedContainerColor = White,
                                 unfocusedBorderColor = InputBorder,
                                 focusedBorderColor = NavyDark,
-                                unfocusedTextColor = if (selectedGroup.isBlank()) InputHint else NavyDark,
+                                unfocusedTextColor = if (selectedGroups.isEmpty()) InputHint else NavyDark,
                                 focusedTextColor = NavyDark,
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        // Transparent overlay button to capture taps on the field
+                        // Overlay transparent pour capter le clic
                         Button(
-                            onClick = { groupExpanded = true },
-                            modifier = Modifier
-                                .matchParentSize(),
+                            onClick = { showGroupDialog = true },
+                            modifier = Modifier.matchParentSize(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.Transparent,
                                 contentColor = Color.Transparent
@@ -242,24 +248,6 @@ fun AddPostScreen(
                             elevation = ButtonDefaults.buttonElevation(0.dp),
                             contentPadding = PaddingValues(0.dp)
                         ) {}
-
-                        DropdownMenu(
-                            expanded = groupExpanded,
-                            onDismissRequest = { groupExpanded = false },
-                            modifier = Modifier.background(White)
-                        ) {
-                            groups.forEach { group ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(text = group, color = NavyDark, fontSize = 14.sp)
-                                    },
-                                    onClick = {
-                                        selectedGroup = group
-                                        groupExpanded = false
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -269,10 +257,12 @@ fun AddPostScreen(
                     onClick = {
                         imageUri?.let { uri ->
                             val imageFile = getFileFromUri(context, uri)
-                            val groupId = groupIds[selectedGroup] ?: 0 // Récupère l'ID du groupe ou 0
+                            val selectedGroupId = groupIds[selectedGroup] ?: 0
+
+                            val groupsListToPost = listOf(selectedGroupId)
 
                             if (imageFile != null) {
-                                viewModel.uploadPost(token, imageFile, caption, groupId, locationId = 1)
+                                viewModel.uploadPost(token, imageFile, caption, groupsListToPost, locationId = 1)
                             } else {
                                 Toast.makeText(context, "Erreur avec l'image", Toast.LENGTH_SHORT).show()
                             }
@@ -308,7 +298,7 @@ fun AddPostScreen(
         }
 
         BottomNav(
-            selected = NavDestination.ADD, // Assure-toi que ADD existe dans ton enum
+            selected = NavDestination.ADD,
             onSelect = onNavigate
         )
     }

@@ -25,7 +25,7 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part,
         @Part("description") description: RequestBody,
-        @Part("groupe") groupe: RequestBody,
+        @Part("groupe") groupes: List<RequestBody>,
         @Part("id_loc") idLoc: RequestBody
     ): String
 
@@ -76,4 +76,32 @@ interface ApiService {
         @Field("group_id") groupId: Int,
         @Field("password") password: String = ""
     ): JoinGroupResponse
+
+    // -- Social / Follows (protected) ------------------------------
+    @FormUrlEncoded
+    @POST("/follow")
+    suspend fun followUser(
+        @Header("Authorization") token: String,
+        @Field("user_id") targetUserId: Int
+    ): String
+
+    @FormUrlEncoded
+    @POST("/unfollow")
+    suspend fun unfollowUser(
+        @Header("Authorization") token: String,
+        @Field("user_id") targetUserId: Int
+    ): String
+
+    @GET("/getFollowers")
+    suspend fun getFollowers(
+        @Header("Authorization") token: String
+    ): List<FollowerResponse>
+
+    // -- Paramètres Profil (protected) -----------------------------
+    @Multipart
+    @POST("/changePP")
+    suspend fun changeProfilePicture(
+        @Header("Authorization") token: String,
+        @Part image: MultipartBody.Part
+    ): ChangePPResponse
 }

@@ -82,21 +82,21 @@ class PostRepository {
         token: String,
         imageFile: File,
         description: String,
-        groupId: Int,
+        groupIds: List<Int>,
         locationId: Int
     ): String {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
         val imagePart = MultipartBody.Part.createFormData("image", imageFile.name, requestFile)
 
         val descriptionPart = description.toRequestBody("text/plain".toMediaTypeOrNull())
-        val groupPart = groupId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+        val groupParts = groupIds.map { groupId -> groupId.toString().toRequestBody("text/plain".toMediaTypeOrNull()) }
         val locationPart = locationId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
 
         return api.makePost(
             token = token,
             image = imagePart,
             description = descriptionPart,
-            groupe = groupPart,
+            groupes = groupParts,
             idLoc = locationPart
         )
     }

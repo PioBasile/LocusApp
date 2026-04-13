@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigate = { currentNav = it }
                             )
                             NavDestination.PROFILE -> ProfileScreen(
-                                //token = uiState.token ?: "",
+                                token = uiState.token ?: "",
                                 onNavigate = { currentNav = it }
                             )
                         }

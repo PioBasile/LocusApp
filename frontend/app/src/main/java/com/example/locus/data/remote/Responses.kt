@@ -38,7 +38,6 @@ data class LocationResponse(
 )
 
 // -- Groups --------------------------------------------------------------------
-
 data class MakeGroupResponse(
     val message: String,
     val group_id: Int
@@ -54,4 +53,15 @@ data class GroupResponse(
     val name: String,
     val is_private: Boolean,
     val description: String
+)
+
+// -- Followers ------------------------------------------------------------------
+data class FollowerResponse(
+    val id: Int,
+    val username: String,
+)
+
+// -- Profile pic ----------------------------------------------------------------
+data class ChangePPResponse(
+    val message: String,
 )

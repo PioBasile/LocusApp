@@ -132,7 +132,7 @@ private fun PostCardContent(post: Post) {
                         )
                     }
 
-                    // Points de pagination 
+                    // Points de pagination
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
