@@ -142,3 +142,53 @@ func addPostToGroupHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Post ajouté au groupe avec succès !"})
 }
 
+
+func GetGroupByIDHandler(w http.ResponseWriter, r *http.Request) {
+	groupID := r.URL.Query().Get("id")
+	if groupID == "" {
+		http.Error(w, "L'ID du groupe est requis", http.StatusBadRequest)
+		return
+	}
+
+	var name string
+	var imageURL sql.NullString
+	err := db.QueryRow("SELECT nom, url_image FROM Groupes WHERE id_grp = $1", groupID).Scan(&name, &imageURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Groupe introuvable", http.StatusNotFound)
+		} else {
+			http.Error(w, "Erreur lors de la récupération du groupe", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT u.id, u.username, u.ppurl 
+		FROM Utilisateurs u
+		JOIN MembreGroupes mg ON u.id = mg.usr_id
+		WHERE mg.id_grp = $1`, groupID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des membres", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var members []lib.PublicUserInfo
+	for rows.Next() {
+		var user lib.PublicUserInfo
+		if err := rows.Scan(&user.ID, &user.Username, &user.ProfilePicture); err != nil {
+			continue
+		}
+		members = append(members, user)
+	}
+
+	response := map[string]interface{}{
+		"name":      name,
+		"image_url": imageURL.String,
+		"members":   members,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
