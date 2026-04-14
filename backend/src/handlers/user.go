@@ -93,3 +93,16 @@ func ChangePPHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Photo de profil mise à jour avec succès !"})
 }
+
+
+func getGroupsOfUser() ([]lib.Group, error) {
+
+	userID := r.Context().Value(UserIDKey).(int)
+	var groups []lib.Group
+	query := `SELECT g.id_grp, g.nom, g.is_private, g.description, g.url_image
+			  FROM Groupes g
+			  JOIN Membres m ON g.id_grp = m.id_grp
+			  WHERE m.usr_id = $1`
+	err := db.Select(&groups, query, userID)
+	return groups, err
+}
