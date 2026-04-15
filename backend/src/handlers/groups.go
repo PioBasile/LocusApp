@@ -70,7 +70,7 @@ func MakeGroupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetGroupsHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id_grp, nom, is_private, description FROM Groupes")
+	rows, err := db.Query("SELECT id_grp, nom, is_private, description, url_image FROM Groupes")
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération des groupes", http.StatusInternalServerError)
 		return
@@ -83,6 +83,7 @@ func GetGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		var name string
 		var isPrivate bool
 		var description sql.NullString
+		var urlImage sql.NullString 
 		if err := rows.Scan(&id, &name, &isPrivate, &description); err != nil {
 			http.Error(w, "Erreur lors de la lecture des groupes", http.StatusInternalServerError)
 			return
@@ -92,6 +93,7 @@ func GetGroupsHandler(w http.ResponseWriter, r *http.Request) {
 			"name": name,
 			"is_private": isPrivate,
 			"description": description.String,
+			"image_url": urlImage.String,
 		})
 	}
 
