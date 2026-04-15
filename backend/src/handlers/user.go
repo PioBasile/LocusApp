@@ -95,7 +95,7 @@ func ChangePPHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUserGroupsHandler(w http.ResponseWriter, r *http.Request) {
-    userID, ok := r.Context().Value(UserIDKey).(int)
+    userID := r.Context().Value(UserIDKey).(int)
     
     var groupsID []int 
     query := `SELECT id_grp FROM MembreGroupes WHERE usr_id = $1;`
