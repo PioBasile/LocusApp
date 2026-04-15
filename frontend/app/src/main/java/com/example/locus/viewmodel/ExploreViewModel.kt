@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.locus.data.model.Group
 import com.example.locus.data.repository.GroupRepository
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class ExploreUiState(
     val groups: List<Group> = emptyList(),
@@ -64,11 +65,12 @@ class ExploreViewModel(
         name: String,
         description: String,
         isPrivate: Boolean,
-        password: String = ""
+        password: String = "",
+        imageFile: File
     ) {
         viewModelScope.launch {
             try {
-                val result = groupRepository.makeGroup(token, name, description, isPrivate, password)
+                val result = groupRepository.makeGroup(token, name, description, isPrivate, password, imageFile)
                 uiState = uiState.copy(createSuccess = result.message, createError = null)
                 loadGroups() // refresh list after creating
             } catch (e: Exception) {

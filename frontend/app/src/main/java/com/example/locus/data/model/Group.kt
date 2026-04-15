@@ -1,5 +1,7 @@
 package com.example.locus.data.model
 
+import androidx.compose.ui.text.LinkAnnotation
+
 data class Group (
     val id: Int,
     val name: String,
@@ -7,5 +9,5 @@ data class Group (
     val isPrivate: Boolean,
     val password: String,
     //val member_count : Int,
-    //val profile_picture : String
+    val imageUrl : String?
 )

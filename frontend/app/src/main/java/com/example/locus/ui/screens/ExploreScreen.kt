@@ -1,6 +1,8 @@
 package com.example.locus.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -37,6 +40,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import coil.compose.AsyncImagePainter
+import android.util.Log
 
 // -- Dummy trending users (no backend endpoint yet) ----------------------------
 private data class TrendingUser(
@@ -96,9 +101,13 @@ fun ExploreScreen(
         CreateGroupDialog(
             token = token,
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, description, isPrivate, password ->
-                viewModel.createGroup(token, name, description, isPrivate, password)
-                showCreateDialog = false
+            onCreate = { name, description, isPrivate, password, imageFile ->
+                if (imageFile != null) {
+                    viewModel.createGroup(token, name, description, isPrivate, password, imageFile)
+                    showCreateDialog = false
+                } else {
+                    Toast.makeText(context, "An image is required", Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }
@@ -288,7 +297,7 @@ fun ExploreScreen(
                                         group = group,
                                         onJoin = {
                                             if (group.isPrivate) {
-                                                joinTargetGroup = group  // ← triggers the dialog
+                                                joinTargetGroup = group
                                             } else {
                                                 viewModel.joinGroup(token, group.id)
                                             }
@@ -344,6 +353,7 @@ fun ExploreScreen(
 }
 
 // -- Group card ----------------------------------------------------------------
+
 @Composable
 private fun GroupCard(
     group: Group,
@@ -361,17 +371,31 @@ private fun GroupCard(
                 .clip(RoundedCornerShape(12.dp))
                 .background(NavyMedium)
         ) {
-            // No image URL from backend yet — show navy placeholder with initial
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = group.name.first().uppercaseChar().toString(),
-                    color = GoldPrimary,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
+            if (!group.imageUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = group.imageUrl,
+                    contentDescription = group.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    onState = { state ->
+                        if (state is AsyncImagePainter.State.Error) {
+                            Log.e("COIL_ERREUR", "Impossible de charger l'image : ${state.result.throwable}")
+                        }
+                    }
                 )
+            } else {
+                // Fallback to the initial if no image
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = group.name.firstOrNull()?.uppercaseChar()?.toString() ?: "",
+                        color = GoldPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             // Lock icon for private groups
@@ -493,12 +517,19 @@ private fun UserCard(
 private fun CreateGroupDialog(
     token: String,
     onDismiss: () -> Unit,
-    onCreate: (name: String, description: String, isPrivate: Boolean, password: String) -> Unit
+    onCreate: (name: String, description: String, isPrivate: Boolean, password: String, imageFile: java.io.File?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var isPrivate by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    var imageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> imageUri = uri }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -508,6 +539,40 @@ private fun CreateGroupDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(OffWhite),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (imageUri != null) {
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Group Image",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Button(
+                            onClick = { imagePicker.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark.copy(alpha = 0.7f))
+                        ) {
+                            Text("Change Image", color = White)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { imagePicker.launch("image/*") },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null, tint = NavyDark)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add Group Cover", color = NavyDark)
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -560,7 +625,11 @@ private fun CreateGroupDialog(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        onCreate(name, description, isPrivate, password)
+                        val imageFile = imageUri?.let { uri ->
+                            com.example.locus.ui.screens.getFileFromUri(context, uri)
+                        }
+
+                        onCreate(name, description, isPrivate, password, imageFile)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark),

@@ -53,20 +53,16 @@ interface ApiService {
 
 
     // -- Groups (protected) ----------------------------------------
-    @POST("/makeGroup")
-    suspend fun makeGroup(
-        @Header("Authorization") token: String,
-        @Body group: CreateGroupRequest
-    ): String
 
-    @FormUrlEncoded
+    @Multipart
     @POST("/makeGroup")
     suspend fun makeGroup(
         @Header("Authorization") token: String,
-        @Field("name") name: String,
-        @Field("description") description: String,
-        @Field("is_private") isPrivate: Boolean,
-        @Field("password") password: String = ""
+        @Part("name") name: RequestBody,
+        @Part("description") description: RequestBody,
+        @Part("is_private") isPrivate: RequestBody,
+        @Part("password") password: RequestBody,
+        @Part image: MultipartBody.Part
     ): MakeGroupResponse
 
     @FormUrlEncoded
@@ -76,6 +72,16 @@ interface ApiService {
         @Field("group_id") groupId: Int,
         @Field("password") password: String = ""
     ): JoinGroupResponse
+
+    @GET("/getGroupInfo")
+    suspend fun getGroupById(
+        @Query("id") groupId: Int
+    ): GroupDetailResponse
+
+    @GET("/getUserGroups")
+    suspend fun getMyGroupIds(
+        @Header("Authorization") token: String
+    ): List<Int>
 
     // -- Social / Follows (protected) ------------------------------
     @FormUrlEncoded

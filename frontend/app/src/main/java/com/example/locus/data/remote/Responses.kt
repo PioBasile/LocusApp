@@ -1,5 +1,7 @@
 package com.example.locus.data.remote
 
+import com.google.gson.annotations.SerializedName
+
 
 // -- Auth ----------------------------------------------------------------------
 data class LoginResponse(val token: String)
@@ -52,7 +54,28 @@ data class GroupResponse(
     val id: Int,
     val name: String,
     val is_private: Boolean,
-    val description: String
+    val description: String,
+    @SerializedName("image_url") val imageUrl: String?
+)
+
+data class GroupDetailResponse(
+    val name: String,
+    @SerializedName("image_url") val imageUrl: String?,
+    val members: List<GroupMemberResponse>
+)
+
+data class GroupMemberResponse(
+    val id: Int,
+    val username: String,
+    val ppurl: String? = null
+)
+
+data class MyGroupResponse(
+    @SerializedName("id_grp") val id: Int,
+    @SerializedName("nom") val name: String,
+    @SerializedName("is_private") val isPrivate: Boolean?,
+    @SerializedName("description") val description: String?,
+    @SerializedName("image_url") val imageUrl: String?
 )
 
 // -- Followers ------------------------------------------------------------------

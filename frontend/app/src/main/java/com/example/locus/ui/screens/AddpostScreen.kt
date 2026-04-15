@@ -46,25 +46,31 @@ fun AddPostScreen(
     val context = LocalContext.current
     var caption by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
-    var selectedGroup by remember { mutableStateOf("") }
+
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedGroups by remember { mutableStateOf(setOf<String>()) }
     val scrollState = rememberScrollState()
-    val groups = listOf("Hiking", "City Trips", "Road Trips", "Beach", "Family", "Solo")
 
-    // Mapping temporaire pour simuler les IDs de groupe
-    val groupIds = mapOf("Hiking" to 1, "City Trips" to 2, "Road Trips" to 3, "Beach" to 4, "Family" to 5, "Solo" to 6)
+    val myGroups by viewModel.userGroups.collectAsState()
+    var selectedGroupIds by remember { mutableStateOf(setOf<Int>()) }
     var showGroupDialog by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> imageUri = uri }
 
+
+    LaunchedEffect(token) {
+        if (token.isNotEmpty() && myGroups.isEmpty()) {
+            viewModel.loadUserGroups(token)
+        }
+    }
+
     // Observers pour les retours du ViewModel
     LaunchedEffect(viewModel.successMessage) {
         viewModel.successMessage?.let {
             Toast.makeText(context, "Post partagé avec succès !", Toast.LENGTH_SHORT).show()
-            onNavigate(NavDestination.EXPLORE) // Ou HOME selon ton app
+            onNavigate(NavDestination.EXPLORE)
             viewModel.clearMessages()
         }
     }
@@ -197,6 +203,7 @@ fun AddPostScreen(
                 )
 
                 // -- Group dropdown --------------------------------
+
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "GROUPS",
@@ -206,10 +213,12 @@ fun AddPostScreen(
                         letterSpacing = 1.sp
                     )
                     Box {
-                        val groupDisplayText = if (selectedGroups.isEmpty()) {
+                        // Affiche les noms des groupes sélectionnés
+                        val groupDisplayText = if (selectedGroupIds.isEmpty()) {
                             "Select groups"
                         } else {
-                            selectedGroups.joinToString(", ")
+                            myGroups.filter { it.id in selectedGroupIds }
+                                .joinToString(", ") { it.name }
                         }
 
                         OutlinedTextField(
@@ -220,11 +229,7 @@ fun AddPostScreen(
                             shape = RoundedCornerShape(12.dp),
                             trailingIcon = {
                                 IconButton(onClick = { showGroupDialog = true }) {
-                                    Icon(
-                                        Icons.Filled.ArrowDropDown,
-                                        contentDescription = "Expand",
-                                        tint = NavyDark
-                                    )
+                                    Icon(Icons.Filled.ArrowDropDown, contentDescription = "Expand", tint = NavyDark)
                                 }
                             },
                             colors = OutlinedTextFieldDefaults.colors(
@@ -232,23 +237,72 @@ fun AddPostScreen(
                                 focusedContainerColor = White,
                                 unfocusedBorderColor = InputBorder,
                                 focusedBorderColor = NavyDark,
-                                unfocusedTextColor = if (selectedGroups.isEmpty()) InputHint else NavyDark,
+                                unfocusedTextColor = if (selectedGroupIds.isEmpty()) InputHint else NavyDark,
                                 focusedTextColor = NavyDark,
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        // Overlay transparent pour capter le clic
                         Button(
                             onClick = { showGroupDialog = true },
                             modifier = Modifier.matchParentSize(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent,
-                                contentColor = Color.Transparent
-                            ),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.Transparent),
                             elevation = ButtonDefaults.buttonElevation(0.dp),
                             contentPadding = PaddingValues(0.dp)
                         ) {}
                     }
+                }
+
+                // -- Dialog Multi-Sélection ------------------------
+                if (showGroupDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showGroupDialog = false },
+                        title = { Text("Select Groups", color = NavyDark, fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())
+                            ) {
+                                // On boucle sur les vrais groupes de la BDD !
+                                myGroups.forEach { group ->
+                                    val isChecked = selectedGroupIds.contains(group.id)
+                                    Surface(
+                                        onClick = {
+                                            selectedGroupIds = if (isChecked) {
+                                                selectedGroupIds - group.id
+                                            } else {
+                                                selectedGroupIds + group.id
+                                            }
+                                        },
+                                        color = Color.Transparent,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = null,
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = GoldPrimary,
+                                                    checkmarkColor = White,
+                                                    uncheckedColor = InputBorder
+                                                )
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text(text = group.name, color = NavyDark, fontSize = 16.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showGroupDialog = false }) {
+                                Text("Done", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                        },
+                        containerColor = White,
+                        shape = RoundedCornerShape(16.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -257,9 +311,8 @@ fun AddPostScreen(
                     onClick = {
                         imageUri?.let { uri ->
                             val imageFile = getFileFromUri(context, uri)
-                            val selectedGroupId = groupIds[selectedGroup] ?: 0
 
-                            val groupsListToPost = listOf(selectedGroupId)
+                            val groupsListToPost = selectedGroupIds.toList()
 
                             if (imageFile != null) {
                                 viewModel.uploadPost(token, imageFile, caption, groupsListToPost, locationId = 1)

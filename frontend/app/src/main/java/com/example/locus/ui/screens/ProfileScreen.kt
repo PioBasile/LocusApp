@@ -360,7 +360,6 @@ fun ProfileScreen(
 }
 
 // Bouton Follow/Unfollow
-// Bouton Follow/Unfollow en pilule dorée (Correction du crash clickable)
 @Composable
 private fun ActionPill(text: String, onClick: () -> Unit) {
     Surface(
