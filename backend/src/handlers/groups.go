@@ -165,9 +165,9 @@ func GetGroupByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT u.id, u.username, u.ppurl 
+		SELECT u.usr_id, u.username, u.url_pp 
 		FROM Utilisateurs u
-		JOIN MembreGroupes mg ON u.id = mg.usr_id
+		JOIN MembreGroupes mg ON u.usr_id = mg.usr_id
 		WHERE mg.id_grp = $1`, groupID)
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération des membres", http.StatusInternalServerError)
