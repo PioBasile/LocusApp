@@ -45,3 +45,11 @@ type PublicUserInfo struct {
 	Username       string `json:"username" db:"username"`
 	ProfilePicture string `json:"ppurl" db:"ppurl"`
 }
+
+// Group represents a user group
+type Group struct {
+	ID          int    `json:"id" db:"id_groupe"`
+	Name        string `json:"name" db:"nom"`
+	Description string `json:"description" db:"description"`
+	imageURL    string `json:"image_url" db:"url_image"`
+}

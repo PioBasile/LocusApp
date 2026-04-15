@@ -94,15 +94,20 @@ func ChangePPHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Photo de profil mise à jour avec succès !"})
 }
 
-
-func getGroupsOfUser() ([]lib.Group, error) {
-
+func GetUserGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(int)
+
 	var groups []lib.Group
-	query := `SELECT g.id_grp, g.nom, g.is_private, g.description, g.url_image
+	query := `SELECT g.grp_id as id, g.grp_name as name, g.grp_desc as description, g.url_img as imgurl 
 			  FROM Groupes g
-			  JOIN Membres m ON g.id_grp = m.id_grp
-			  WHERE m.usr_id = $1`
+			  JOIN User_Groups ug ON g.grp_id = ug.grp_id
+			  WHERE ug.usr_id = $1`
 	err := db.Select(&groups, query, userID)
-	return groups, err
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des groupes", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(groups)
 }
