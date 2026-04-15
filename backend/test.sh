@@ -81,4 +81,8 @@ curl -X GET "$BASE_URL/getPublicProfile?id=$MY_ID"
 echo -e "\n[13] Test Localisation (ID 1)..."
 curl -X GET "$BASE_URL/getLocations?id=1"
 
+echo -e "\n[14] Test fetch groupes..."
+curl -X GET http://mobile.piorian.fr/getUserGroups \
+     -H "Authorization: $TOKEN"
+
 echo -e "\n\n=== TOUTES LES ROUTES ONT ÉTÉ CIBLÉES ==="
