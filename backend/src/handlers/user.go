@@ -95,19 +95,22 @@ func ChangePPHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUserGroupsHandler(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(UserIDKey).(int)
+    userID, ok := r.Context().Value(UserIDKey).(int)
+    
+    var groupsID []int 
+    query := `SELECT id_grp FROM MembreGroupes WHERE usr_id = $1;`
 
-	var groups []lib.Group
-	query := `SELECT g.grp_id as id, g.grp_name as name, g.grp_desc as description, g.url_img as imgurl 
-			  FROM Groupes g
-			  JOIN User_Groups ug ON g.grp_id = ug.grp_id
-			  WHERE ug.usr_id = $1`
-	err := db.Select(&groups, query, userID)
-	if err != nil {
-		http.Error(w, "Erreur lors de la récupération des groupes", http.StatusInternalServerError)
-		return
-	}
+    err := db.Select(&groupsID, query, userID)
+    if err != nil {
+        log.Printf("Erreur SQL: %v", err)
+        http.Error(w, "Erreur lors de la récupération des IDs", http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(groups)
+    if groupsID == nil {
+        groupsID = []int{}
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(groupsID)
 }
