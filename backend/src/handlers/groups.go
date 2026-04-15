@@ -84,7 +84,7 @@ func GetGroupsHandler(w http.ResponseWriter, r *http.Request) {
 		var isPrivate bool
 		var description sql.NullString
 		var urlImage sql.NullString 
-		if err := rows.Scan(&id, &name, &isPrivate, &description); err != nil {
+		if err := rows.Scan(&id, &name, &isPrivate, &description, &urlImage); err != nil {
 			http.Error(w, "Erreur lors de la lecture des groupes", http.StatusInternalServerError)
 			return
 		}
