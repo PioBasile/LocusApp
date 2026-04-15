@@ -102,7 +102,6 @@ func GetUserGroupsHandler(w http.ResponseWriter, r *http.Request) {
 
     err := db.Select(&groupsID, query, userID)
     if err != nil {
-        log.Printf("Erreur SQL: %v", err)
         http.Error(w, "Erreur lors de la récupération des IDs", http.StatusInternalServerError)
         return
     }
