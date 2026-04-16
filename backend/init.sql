@@ -51,15 +51,15 @@ CREATE TABLE PublicationGroupe (
 
 CREATE TABLE Commentaires (
     id_com SERIAL PRIMARY KEY,
-    id_publication INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
-    id_utilisateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    id_pub INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
+    id_user INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
     commentaire TEXT NOT NULL
 );
 
 CREATE TABLE Likes (
-    id_publication INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
-    id_utilisateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
-    PRIMARY KEY (id_publication, id_utilisateur)
+    id_pub INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
+    id_user INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    PRIMARY KEY (id_pub)
 );
 
 CREATE TABLE Reports (

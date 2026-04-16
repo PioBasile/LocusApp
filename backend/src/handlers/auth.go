@@ -23,6 +23,11 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Email == "" || req.Password == "" || req.Username == "" {
+		http.Error(w, "Email, mot de passe et nom d'utilisateur requis", http.StatusBadRequest)
+		return
+	}
+
 	hashedPassword, _ := lib.HashPassword(req.Password)
 
 	query := `INSERT INTO Utilisateurs (username, email, password, url_pp) 

@@ -322,17 +322,20 @@ func ReportPostHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func LikeHandler(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(UserIDKey).(int)
-	if userID == 0 {
-		userID = -1
-	}
+	val := r.Context().Value(UserIDKey)
+	userID := -1
+	if val != nil {
+    	userID = val.(int)
+	} 
+
+
 	post_id := r.URL.Query().Get("id")
 	if post_id == "" {
 		http.Error(w, "ID du post manquant", http.StatusBadRequest)
 		return
 	}
 
-	query := `INSERT INTO Like (id_user, id_pub) VALUES ($1, $2)`
+	query := `INSERT INTO Likes (id_user, id_pub) VALUES ($1, $2)`
 	_, err := db.Exec(query, userID, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de l'ajout du like", http.StatusInternalServerError)
@@ -351,7 +354,7 @@ func UnlikeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `DELETE FROM Like WHERE id_user = $1 AND id_pub = $2`
+	query := `DELETE FROM Likes WHERE id_user = $1 AND id_pub = $2`
 	_, err := db.Exec(query, userID, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de la suppression du like", http.StatusInternalServerError)
@@ -370,7 +373,7 @@ func GetLikesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var count int
-	query := `SELECT COUNT(*) FROM Like WHERE id_pub = $1`
+	query := `SELECT COUNT(*) FROM Likes WHERE id_pub = $1`
 	err := db.Get(&count, query, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération du nombre de likes", http.StatusInternalServerError)
@@ -385,7 +388,7 @@ func GetAllUserLikesHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(int)
 
 	var likedPosts []int
-	query := `SELECT id_pub FROM Like WHERE id_user = $1`
+	query := `SELECT id_pub FROM Likes WHERE id_user = $1`
 	err := db.Select(&likedPosts, query, userID)
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération des posts likés", http.StatusInternalServerError)
@@ -426,14 +429,14 @@ func GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Comment struct {
-		ID          int       `db:"id_commentaire" json:"id"`
-		UserID      int       `db:"id_user" json:"user_id"`
+		ID          int       `db:"id_com" json:"id"`
+		PubID      int       `db:"id_user" json:"user_id"`
+		UserID       int       `db:"id_pub" json:"post_id"`
 		Commentaire  string    `db:"commentaire" json:"commentaire"`
-		Date        time.Time `db:"date" json:"date"`
 	}
 
 	var comments []Comment
-	query := `SELECT id_commentaire, id_user, commentaire, date FROM Commentaires WHERE id_pub = $1 ORDER BY date ASC`
+	query := `SELECT id_com, id_pub, id_user, commentaire FROM Commentaires WHERE id_pub = $1`
 	err := db.Select(&comments, query, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération des commentaires", http.StatusInternalServerError)

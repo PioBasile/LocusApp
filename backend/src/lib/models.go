@@ -58,5 +58,5 @@ type Group struct {
 type Post_for_algo struct {
     ID      int     `db:"id_pub"`   
     GPS     string  `db:"gps"`     
-	DistanceFromUser float64 `db:"-"`
+	DistanceFromUser float64 
 }

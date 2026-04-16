@@ -48,7 +48,7 @@ func GetNearbyPostIDs(db *sqlx.DB, userGPS string) ([]int, error) {
 	// Ici je suppose que tu joins la table Localisations pour avoir les coordonnées
 	query := `SELECT p.id_pub, l.gps 
 	          FROM Publications p 
-	          JOIN Localisations l ON p.id_localisation = l.id_loc`
+	          JOIN Localisation l ON p.id_localisation = l.id_loc`
 	
 	err := db.Select(&allPosts, query)
 	if err != nil {
