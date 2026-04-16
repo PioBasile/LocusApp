@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.locus.R
 import com.example.locus.data.model.Post
+import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Postcard
@@ -46,21 +47,45 @@ fun HomeScreen(
 ) {
     val uiState = viewModel.uiState
     val scrollState = rememberScrollState()
+    val myGroups by viewModel.userGroups.collectAsState()
 
-    // Load posts on first launch
-    LaunchedEffect(token) {
-        if (token.isNotBlank()) {
-            viewModel.loadPosts(token, groupId = 0)
+    val currentPosts by viewModel.posts.collectAsState()
+    var currentGroup by remember { mutableStateOf<MyGroupResponse?>(null) }
+
+
+    // 1. Charge les groupes au premier lancement (suppression du doublon)
+        LaunchedEffect(Unit) {
+        if (token.isNotEmpty()) {
+            viewModel.loadUserGroups(token)
         }
     }
+
+    // 2. Sélectionne le premier groupe et charge ses posts
+    LaunchedEffect(myGroups) {
+        if (currentGroup == null && myGroups.isNotEmpty()) {
+            val firstGroup = myGroups.first()
+            currentGroup = firstGroup
+            viewModel.loadPostsForGroup(token, firstGroup.id)
+        }
+    }
+
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
     ) {
+
         // -- Top bar -----------------------------------------------
-        Topbar()
+        Topbar(
+            showGroupSelector = true,
+            selectedGroup = currentGroup,
+            groups = myGroups,
+            onGroupChange = { clickedGroup ->
+                currentGroup = clickedGroup
+                viewModel.loadPostsForGroup(token, clickedGroup.id)
+            }
+        )
 
         // -- Feed --------------------------------------------------
         Column(
@@ -101,7 +126,10 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
-                                onClick = { viewModel.loadPosts(token) },
+                                onClick = {
+                                    // Relance le chargement avec le groupe actuel si erreur
+                                    currentGroup?.let { viewModel.loadPostsForGroup(token, it.id) }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
                                 shape = RoundedCornerShape(50.dp)
                             ) {
@@ -110,7 +138,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                uiState.posts.isEmpty() -> {
+                currentPosts.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(32.dp),
                         contentAlignment = Alignment.Center
@@ -124,8 +152,20 @@ fun HomeScreen(
                     }
                 }
                 else -> {
-                    uiState.posts.forEach { post ->
-                        Postcard(post = post)
+                    currentPosts.forEach { postResponse ->
+                        val postForUI = Post(
+                            id = postResponse.id,
+                            userId = postResponse.user_id,
+                            username = "User ${postResponse.user_id}",
+                            groupe = postResponse.groupe.firstOrNull() ?: 0,
+                            description = postResponse.description,
+                            imageUrl = postResponse.imageUrl,
+                            date = postResponse.date,
+                            idLoc = postResponse.id_loc,
+                            locationName = null
+                        )
+
+                        Postcard(post = postForUI)
                     }
                 }
             }
@@ -164,4 +204,3 @@ private fun GuestBanner() {
         }
     }
 }
-

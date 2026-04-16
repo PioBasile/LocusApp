@@ -60,8 +60,8 @@ fun AddPostScreen(
     ) { uri -> imageUri = uri }
 
 
-    LaunchedEffect(token) {
-        if (token.isNotEmpty() && myGroups.isEmpty()) {
+    LaunchedEffect(Unit) {
+        if (token.isNotEmpty() ) {
             viewModel.loadUserGroups(token)
         }
     }
@@ -70,7 +70,7 @@ fun AddPostScreen(
     LaunchedEffect(viewModel.successMessage) {
         viewModel.successMessage?.let {
             Toast.makeText(context, "Post partagé avec succès !", Toast.LENGTH_SHORT).show()
-            onNavigate(NavDestination.EXPLORE)
+            onNavigate(NavDestination.HOME)
             viewModel.clearMessages()
         }
     }

@@ -11,9 +11,9 @@ data class SignupResponse(val message: String)
 data class PostResponse(
     val id: Int,
     val user_id: Int,
-    val groupe: Int,
+    val groupe: List<Int>,
     val description: String,
-    val image_url: String,
+    @SerializedName("image_url") val imageUrl: String,
     val date: String,
     val id_loc: Int?
 )

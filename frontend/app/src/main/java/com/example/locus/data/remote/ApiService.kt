@@ -25,7 +25,7 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part,
         @Part("description") description: RequestBody,
-        @Part("groupe") groupes: List<RequestBody>,
+        @Part("groupe") groupes: @JvmSuppressWildcards List<RequestBody>,
         @Part("id_loc") idLoc: RequestBody
     ): String
 

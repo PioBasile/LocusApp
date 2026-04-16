@@ -14,15 +14,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.locus.R
+import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.ui.theme.*
 
 @Composable
 fun Topbar(
     modifier: Modifier = Modifier,
     showGroupSelector: Boolean = false,
-    selectedGroup: String = "",
-    groups: List<String> = emptyList(),
-    onGroupChange: (String) -> Unit = {}
+    selectedGroup: MyGroupResponse? = null,
+    groups: List<MyGroupResponse> = emptyList(),
+    onGroupChange: (MyGroupResponse) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -57,7 +58,7 @@ fun Topbar(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = selectedGroup.ifBlank { "Select Group" },
+                            text = selectedGroup?.name ?: "Select Group",
                             color = NavyDark,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
@@ -74,20 +75,27 @@ fun Topbar(
                         onDismissRequest = { expanded = false },
                         modifier = Modifier.background(White)
                     ) {
-                        groups.forEach { group ->
+                        if (groups.isEmpty()) {
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = group,
-                                        color = NavyDark,
-                                        fontSize = 14.sp
-                                    )
-                                },
-                                onClick = {
-                                    onGroupChange(group)
-                                    expanded = false
-                                }
+                                text = { Text("Aucun groupe", color = MediumGray, fontSize = 14.sp) },
+                                onClick = { expanded = false }
                             )
+                        } else {
+                            groups.forEach { group ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = group.name,
+                                            color = NavyDark,
+                                            fontSize = 14.sp
+                                        )
+                                    },
+                                    onClick = {
+                                        onGroupChange(group)
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
