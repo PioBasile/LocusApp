@@ -19,6 +19,10 @@ func setupRoutes() {
 	http.HandleFunc("/getLocations", handlers.GetLocalisationHandler)
 	http.HandleFunc("/getGroups", handlers.GetGroupsHandler)
 	http.HandleFunc("/getGroupInfo", handlers.GetGroupByIDHandler)
+	http.HandleFunc("/like", handlers.LikeHandler)
+	http.HandleFunc("/getNearbyPosts", handlers.GetNearbyPostsHandler)
+	http.HandleFunc("/getComments", handlers.GetCommentsHandler)
+	http.HandleFunc("/getLikes", handlers.GetLikesHandler)
 
 	// Protected routes
 	http.HandleFunc("/makepost", handlers.IsAuthorized(handlers.MakePostHandler))
@@ -31,6 +35,12 @@ func setupRoutes() {
 	http.HandleFunc("/getFollowers", handlers.IsAuthorized(handlers.GetFollowers))
 	http.HandleFunc("/changePP", handlers.IsAuthorized(handlers.ChangePPHandler))
 	http.HandleFunc("/getUserGroups", handlers.IsAuthorized(handlers.GetUserGroupsHandler))
+	http.HandleFunc("/unlike", handlers.IsAuthorized(handlers.UnlikeHandler))
+	http.HandleFunc("/getAllUserLikes", handlers.IsAuthorized(handlers.GetAllUserLikesHandler))
+	http.HandleFunc("/reportPost", handlers.IsAuthorized(handlers.ReportPostHandler))
+	http.HandleFunc("/comment", handlers.IsAuthorized(handlers.CommentHandler))
+	http.HandleFunc("/deletePost", handlers.IsAuthorized(handlers.DeletePostHandler))
+
 	
 	
 	

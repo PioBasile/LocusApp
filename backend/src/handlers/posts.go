@@ -244,3 +244,224 @@ func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(posts)
 }
+
+func DeletePostHandler(w http.ResponseWriter, r *http.Request) {
+	postID := r.URL.Query().Get("id")
+	if postID == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	userID := r.Context().Value(UserIDKey).(int)
+
+	var postOwnerID int
+	queryOwner := `SELECT id_publicateur FROM Publications WHERE id_pub = $1`
+	err := db.Get(&postOwnerID, queryOwner, postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post introuvable", http.StatusNotFound)
+		} else {
+			http.Error(w, "Erreur serveur", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if postOwnerID != userID {
+		http.Error(w, "Accès refusé : vous n'êtes pas le propriétaire du post", http.StatusForbidden)
+		return
+	}
+
+	query := `DELETE FROM Publications WHERE id_pub = $1`
+	result, err := db.Exec(query, postID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la suppression du post", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		http.Error(w, "Erreur lors de la vérification de la suppression", http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected == 0 {
+		http.Error(w, "Post introuvable", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Post supprimé avec succès")
+}
+
+// REPORTS
+
+func ReportPostHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+	postID := r.URL.Query().Get("id")
+	comment := r.FormValue("comment")
+	reason := r.FormValue("reason")
+
+	if postID == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+	
+	query := `INSERT INTO Reports (id_publication, id_utilisateur, reason, commentaire) VALUES ($1, $2, $3, $4)`
+	_, err := db.Exec(query, postID, userID, reason, comment)
+	if err != nil {
+		http.Error(w, "Erreur lors du signalement du post", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Post signalé avec succès")
+}
+
+
+// Handlers pour les likes et commentaires
+
+
+func LikeHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+	if userID == 0 {
+		userID = -1
+	}
+	post_id := r.URL.Query().Get("id")
+	if post_id == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	query := `INSERT INTO Like (id_user, id_pub) VALUES ($1, $2)`
+	_, err := db.Exec(query, userID, post_id)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'ajout du like", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Like ajouté avec succès")
+}
+
+func UnlikeHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+	post_id := r.URL.Query().Get("id")
+	if post_id == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	query := `DELETE FROM Like WHERE id_user = $1 AND id_pub = $2`
+	_, err := db.Exec(query, userID, post_id)
+	if err != nil {
+		http.Error(w, "Erreur lors de la suppression du like", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Like supprimé avec succès")
+}
+
+func GetLikesHandler(w http.ResponseWriter, r *http.Request) {
+	post_id := r.URL.Query().Get("id")
+	if post_id == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	var count int
+	query := `SELECT COUNT(*) FROM Like WHERE id_pub = $1`
+	err := db.Get(&count, query, post_id)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération du nombre de likes", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"likes_count": count})
+}
+
+func GetAllUserLikesHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+
+	var likedPosts []int
+	query := `SELECT id_pub FROM Like WHERE id_user = $1`
+	err := db.Select(&likedPosts, query, userID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des posts likés", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(likedPosts)
+}
+
+
+func CommentHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+	post_id := r.URL.Query().Get("id")
+	comment := r.FormValue("comment")
+
+	if post_id == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	query := `INSERT INTO Commentaires (id_user, id_pub, commentaire) VALUES ($1, $2, $3)`
+	_, err := db.Exec(query, userID, post_id, comment)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'ajout du commentaire", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Commentaire ajouté avec succès")
+}
+
+func GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
+	post_id := r.URL.Query().Get("id")
+	if post_id == "" {
+		http.Error(w, "ID du post manquant", http.StatusBadRequest)
+		return
+	}
+
+	type Comment struct {
+		ID          int       `db:"id_commentaire" json:"id"`
+		UserID      int       `db:"id_user" json:"user_id"`
+		Commentaire  string    `db:"commentaire" json:"commentaire"`
+		Date        time.Time `db:"date" json:"date"`
+	}
+
+	var comments []Comment
+	query := `SELECT id_commentaire, id_user, commentaire, date FROM Commentaires WHERE id_pub = $1 ORDER BY date ASC`
+	err := db.Select(&comments, query, post_id)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des commentaires", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(comments)
+}
+
+
+
+
+// algo
+
+func GetNearbyPostsHandler(w http.ResponseWriter, r *http.Request) {
+	gps := r.URL.Query().Get("gps")
+	if gps == "" {
+		http.Error(w, "Coordonnées GPS manquantes", http.StatusBadRequest)
+		return
+	}
+
+	postIDs, err := lib.GetNearbyPostIDs(db, gps) 
+	if err != nil {
+		http.Error(w, "Erreur lors du calcul de proximité", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(postIDs) // Renvoie direct [1, 2, 3, 4, 5]
+}

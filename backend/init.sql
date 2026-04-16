@@ -62,6 +62,14 @@ CREATE TABLE Likes (
     PRIMARY KEY (id_publication, id_utilisateur)
 );
 
+CREATE TABLE Reports (
+    id_report SERIAL PRIMARY KEY,
+    id_publication INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
+    id_utilisateur INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    reason TEXT NOT NULL,
+    commentaire TEXT
+);
+
 CREATE TABLE Followers (
     follower_id INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
     followed_id INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
@@ -71,3 +79,4 @@ CREATE TABLE Followers (
 INSERT INTO Localisation (nom, gps) VALUES ('Debug', '(43.6107, 3.8767)');
 INSERT INTO Groupes (id_grp, nom, is_private, password, owner_id, description) VALUES (0, 'Default', FALSE, NULL, NULL, 'Pas de groupe');
 INSERT INTO Utilisateurs (usr_id, username, email, password, url_pp) VALUES (0, 'debug_user', 'debug@test.com', 'password', 'img.jpg');
+INSERT INTO Utilisateurs (usr_id, username, email, password, url_pp) VALUES (-1, 'Anonyme', 'Anonyme', 'password', 'img.jpg');

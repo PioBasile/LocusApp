@@ -81,8 +81,30 @@ curl -X GET "$BASE_URL/getPublicProfile?id=$MY_ID"
 echo -e "\n[13] Test Localisation (ID 1)..."
 curl -X GET "$BASE_URL/getLocations?id=1"
 
+# 14. USER GROUPS
 echo -e "\n[14] Test fetch groupes..."
 curl -X GET http://mobile.piorian.fr/getUserGroups \
      -H "Authorization: $TOKEN"
+
+# 15. LIKE / UNLIKE
+echo -e "\n[15] Test Like/Unlike sur le post $POST_ID..."
+curl -X POST "$BASE_URL/like" -H "Authorization: $TOKEN" -F "post_id=$POST_ID"
+curl -X GET "$BASE_URL/getLikes?post_id=$POST_ID" -H "Authorization: $TOKEN"
+curl -X GET "$BASE_URL/getAllUserLikes" -H "Authorization: $TOKEN"
+curl -X POST "$BASE_URL/unlike" -H "Authorization: $TOKEN" -F "post_id=$POST_ID"
+
+# 16. Commenter un post
+echo -e "\n[16] Commenter le post $POST_ID..."
+curl -X POST "$BASE_URL/comment" -H "Authorization: $TOKEN" -F "post_id=$POST_ID" -F "comment=Super post de test !"
+curl -X GET "$BASE_URL/getComments?post_id=$POST_ID" -H "Authorization: $TOKEN"
+
+# 17. Test Algorithme de recommandation
+echo -e "\n[17] Test de l'algorithme de recommandation..."
+curl -X GET "$BASE_URL/recommendations?gps=48.8566,2.3522" -H "Authorization: $TOKEN"
+
+# 18. Test de signalement d'un post
+echo -e "\n[18] Test de signalement du post $POST_ID..."
+curl -X POST "$BASE_URL/report" -H "Authorization: $TOKEN" \
+     -F "post_id=$POST_ID" -F "reason=Inapproprié" -F "commentaire=Ce post est offensant."
 
 echo -e "\n\n=== TOUTES LES ROUTES ONT ÉTÉ CIBLÉES ==="

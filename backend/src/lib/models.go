@@ -53,3 +53,10 @@ type Group struct {
 	Description string `json:"description" db:"description"`
 	imageURL    string `json:"image_url" db:"url_image"`
 }
+
+
+type Post_for_algo struct {
+    ID      int     `db:"id_pub"`   
+    GPS     string  `db:"gps"`     
+	DistanceFromUser float64 `db:"-"`
+}
