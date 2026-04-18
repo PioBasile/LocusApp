@@ -429,10 +429,10 @@ func GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Comment struct {
-		ID          int       `db:"id_com" json:"id"`
-		PubID      int       `db:"id_user" json:"user_id"`
-		UserID       int       `db:"id_pub" json:"post_id"`
-		Commentaire  string    `db:"commentaire" json:"commentaire"`
+		ID          int    `db:"id_com" json:"id"`
+        UserID      int    `db:"id_user" json:"user_id"` 
+        PubID       int    `db:"id_pub" json:"post_id"` 
+        Commentaire string `db:"commentaire" json:"commentaire"`
 	}
 
 	var comments []Comment
