@@ -35,6 +35,52 @@ interface ApiService {
         @Query("groupe") groupId: Int
     ): List<PostResponse>
 
+    @GET("/deletePost")
+    suspend fun deletePost(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int
+    ): String
+
+    @POST("/comment")
+    suspend fun postComment(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int,
+        @Query("comment") comment: String
+    )
+
+    @GET("/getComments")
+    suspend fun getComments(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int
+    ): List<CommentResponse>
+
+    @POST("/like")
+    suspend fun likePost(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int
+    )
+
+    @GET("/getLikes")
+    suspend fun getLikes(
+        @Header("Authorization") token: String)
+    : Int
+
+    @POST("/unlike")
+    suspend fun unlikePost(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int
+    )
+
+    @POST("/report")
+    suspend fun reportPost(
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int,
+        @Query("comment") comment: String,
+        @Query("reason") reason: String
+    )
+
+
+
     // -- Profile (public) ------------------------------------------
     @GET("/getPublicProfile")
     suspend fun getPublicProfile(@Query("id") userId: Int): PublicProfileResponse
@@ -50,7 +96,6 @@ interface ApiService {
     // -- Groups (public) -------------------------------------------
     @GET("/getGroups")
     suspend fun getGroups(): List<GroupResponse>
-
 
     // -- Groups (protected) ----------------------------------------
 
@@ -109,5 +154,5 @@ interface ApiService {
     suspend fun changeProfilePicture(
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part
-    ): ChangePPResponse
+    )
 }

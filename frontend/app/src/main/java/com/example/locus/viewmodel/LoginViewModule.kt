@@ -52,4 +52,12 @@ class UserViewModel(
     fun continueAsGuest() {
         _uiState.value = _uiState.value.copy(isSuccess = true, token = null)
     }
+
+    fun saveTokenFromSignup(newToken: String) {
+        _uiState.value = _uiState.value.copy(
+            isSuccess = true,
+            token = newToken,
+            errorMessage = null
+        )
+    }
 }

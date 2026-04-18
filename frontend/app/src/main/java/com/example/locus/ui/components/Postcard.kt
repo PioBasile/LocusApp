@@ -29,20 +29,49 @@ import coil.compose.AsyncImage
 import com.example.locus.data.model.Post
 import com.example.locus.ui.theme.*
 import com.example.locus.utils.formatTimeAgo
+import androidx.compose.material.icons.filled.Favorite
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.locus.viewmodel.HomeViewModel
 
 @Composable
-fun Postcard(post: Post) {
+fun Postcard(
+    post: Post,
+    viewModel: HomeViewModel,
+    onCommentClick: () -> Unit = {},
+    onLikeClick: (Boolean) -> Unit = {},
+) {
     key(post.id) {
-        PostCardContent(post = post)
+        PostCardContent(
+            post = post,
+            viewModel = viewModel,
+            onCommentClick = onCommentClick,
+            onLikeClick = onLikeClick,
+
+            )
     }
 }
 
 @Composable
-private fun PostCardContent(post: Post) {
-    val authorName = post.username ?: "Unknown"
-    val authorAvatarUrl = "https://picsum.photos/seed/${post.userId}/100/100"
+private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick: () -> Unit = {},onLikeClick: (Boolean) -> Unit = {}) {
+
+    var authorName by remember { mutableStateOf(post.username ?: "User ${post.userId}") }
+    var authorAvatarUrl by remember { mutableStateOf<String?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
     val locationName = post.locationName ?: "Unknown"
     val imageCount = 1
+
+    var isLiked by remember { mutableStateOf(false) }
+    var likesCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(post.userId) {
+        val profile = viewModel.getPublicProfile(post.userId)
+        if (profile != null) {
+            authorName = profile.username
+            authorAvatarUrl = profile.ppurl
+        }
+        isLoadingProfile = false
+    }
 
     Card(
         modifier = Modifier
@@ -61,15 +90,29 @@ private fun PostCardContent(post: Post) {
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = authorAvatarUrl,
-                    contentDescription = "Avatar",
-                    contentScale = ContentScale.Crop,
+                Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(GoldPrimary)
-                )
+                        .background(if (isLoadingProfile) Color.LightGray else GoldPrimary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!authorAvatarUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = authorAvatarUrl,
+                            contentDescription = "Avatar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = if (isLoadingProfile) "" else authorName.take(1).uppercase(),
+                            color = White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(10.dp))
 
@@ -163,17 +206,50 @@ private fun PostCardContent(post: Post) {
                 // Actions de gauche (Like, Comment, Save)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     PostActionItem(
-                        icon = { Icon(Icons.Filled.FavoriteBorder, contentDescription = "Like", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
-                        count = 676
+                        icon = {
+                            IconButton(
+                                onClick = {
+                                    isLiked = !isLiked // Inverse l'état
+                                    likesCount = if (isLiked) likesCount + 1 else likesCount - 1
+                                    onLikeClick(isLiked) // Prévient le ViewModel
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    // Change l'icône si c'est liké
+                                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                    contentDescription = "Like",
+                                    // Change la couleur (Rouge si liké, Or sinon)
+                                    tint = if (isLiked) Color(0xFFE53935) else GoldPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        },
+                        count = likesCount // Affiche la vraie variable
                     )
+
+
                     PostActionItem(
-                        icon = { Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Comment", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
+                        icon = {
+                            // Wrap the Icon in an IconButton to make it clickable
+                            IconButton(
+                                onClick = onCommentClick,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.ChatBubbleOutline,
+                                    contentDescription = "Comment",
+                                    tint = GoldPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        },
                         count = 676
                     )
-                    PostActionItem(
-                        icon = { Icon(Icons.Filled.BookmarkBorder, contentDescription = "Bookmark", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
-                        count = 676
-                    )
+//                    PostActionItem(
+//                        icon = { Icon(Icons.Filled.BookmarkBorder, contentDescription = "Bookmark", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
+//                        count = 676
+//                    )
                 }
 
                 // Location chip
@@ -210,7 +286,7 @@ private fun PostCardContent(post: Post) {
                 }
             }
 
-            // -- Caption
+            // -- Caption -------------------------------------------------------------------
             Text(
                 text = buildAnnotatedString {
                     withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = White)) {

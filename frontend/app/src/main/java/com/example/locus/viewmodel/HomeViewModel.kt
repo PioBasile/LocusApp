@@ -6,9 +6,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.model.Post
+import com.example.locus.data.remote.CommentResponse
 import com.example.locus.data.remote.GroupDetailResponse
 import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.data.remote.PostResponse
+import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.repository.GroupRepository
 import com.example.locus.data.repository.PostRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +92,67 @@ class HomeViewModel(
             isLoading = true
             groupDetail = grprepository.getGroupDetails(groupId)
             isLoading = false
+        }
+    }
+
+    // -- État des commentaires -----------------------------------------
+    private val _currentComments = MutableStateFlow<List<CommentResponse>>(emptyList())
+    val currentComments: StateFlow<List<CommentResponse>> = _currentComments.asStateFlow()
+
+    private val _isLoadingComments = MutableStateFlow(false)
+    val isLoadingComments: StateFlow<Boolean> = _isLoadingComments.asStateFlow()
+
+    // -- Fonctions -----------------------------------------------------
+
+    // Appelé quand on clique sur le bouton commentaire d'un post
+    fun loadCommentsForPost(token: String, postId: Int) {
+        viewModelScope.launch {
+            _isLoadingComments.value = true
+            // On vide la liste temporairement pour éviter de voir les commentaires du post précédent
+            _currentComments.value = emptyList()
+
+            // Appel à repository
+            val fetchedComments = postRepository.getComments(token, postId)
+            _currentComments.value = fetchedComments
+
+            _isLoadingComments.value = false
+        }
+    }
+
+    // Appelé quand on clique sur "Envoyer" dans le Bottom Sheet
+    fun addComment(token: String, postId: Int, text: String) {
+        if (text.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                postRepository.addComment(token, postId, text)
+                // On recharge directement les commentaires pour voir le nouveau apparaître !
+                loadCommentsForPost(token, postId)
+            } catch (e: Exception) {
+                println("Erreur lors de l'ajout du commentaire : ${e.message}")
+            }
+        }
+    }
+
+    fun toggleLike(token: String, postId: Int, isNowLiked: Boolean) {
+        viewModelScope.launch {
+            try {
+                if (isNowLiked) {
+                    postRepository.likePost(token, postId)
+                } else {
+                    postRepository.unlikePost(token, postId)
+                }
+            } catch (e: Exception) {
+                println("Erreur lors du like : ${e.message}")
+            }
+        }
+    }
+
+    suspend fun getPublicProfile(userId: Int): PublicProfileResponse? {
+        return try {
+            postRepository.getPublicProfile(userId)
+        } catch (e: Exception) {
+            null
         }
     }
 }

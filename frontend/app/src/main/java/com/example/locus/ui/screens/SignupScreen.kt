@@ -1,16 +1,25 @@
 package com.example.locus.ui.screens
 
-
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -18,13 +27,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.locus.R
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.SignupViewModel
 
+// Predefined gradient backgrounds for default avatars
+private val avatarGradients = listOf(
+    listOf(NavyDark, NavyMedium),
+    listOf(GoldPrimary, GoldLight),
+    listOf(NavyMedium, GoldPrimary),
+)
+
 @Composable
 fun SignupScreen(
-    onSignupSuccess: () -> Unit = {},
+    onSignupSuccess: (String) -> Unit = {},
     onBackToLogin: () -> Unit = {},
     viewModel: SignupViewModel = viewModel()
 ) {
@@ -35,11 +52,19 @@ fun SignupScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmVisible by remember { mutableStateOf(false) }
+
     val scrollState = rememberScrollState()
 
-    // Navigate on success
     LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) onSignupSuccess()
+        if (uiState.isSuccess && uiState.token != null) {
+            onSignupSuccess(uiState.token)
+        }
+    }
+
+    val localError = when {
+        password.isNotBlank() && confirmPassword.isNotBlank()
+                && password != confirmPassword -> "Passwords do not match"
+        else -> null
     }
 
     Box(
@@ -56,35 +81,37 @@ fun SignupScreen(
             verticalArrangement = Arrangement.Center
         ) {
 
+            Spacer(modifier = Modifier.height(32.dp))
+
             // -- Logo ----------------------------------------------
             Image(
                 painter = painterResource(id = R.drawable.ic_logo),
                 contentDescription = "Locus Logo",
-                modifier = Modifier.size(90.dp)
+                modifier = Modifier.size(72.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Image(
                 painter = painterResource(id = R.drawable.ic_name),
                 contentDescription = "Locus",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
+                    .fillMaxWidth(0.5f)
+                    .height(36.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "Create your account",
-                color = NavyDark.copy(alpha = 0.5f),
-                fontSize = 14.sp,
+                color = NavyDark.copy(alpha = 0.45f),
+                fontSize = 13.sp,
                 fontStyle = FontStyle.Italic
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // -- Username ------------------------------------------
+            // -- Fields --------------------------------------------
             LocusInputField(
                 value = username,
                 onValueChange = { username = it },
@@ -92,9 +119,8 @@ fun SignupScreen(
                 keyboardType = KeyboardType.Text
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // -- Email ---------------------------------------------
             LocusInputField(
                 value = email,
                 onValueChange = { email = it },
@@ -102,9 +128,8 @@ fun SignupScreen(
                 keyboardType = KeyboardType.Email
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // -- Password ------------------------------------------
             LocusInputField(
                 value = password,
                 onValueChange = { password = it },
@@ -115,9 +140,8 @@ fun SignupScreen(
                 onPasswordVisibilityToggle = { passwordVisible = !passwordVisible }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // -- Confirm password ----------------------------------
             LocusInputField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it },
@@ -128,13 +152,7 @@ fun SignupScreen(
                 onPasswordVisibilityToggle = { confirmVisible = !confirmVisible }
             )
 
-            // -- Validation errors ---------------------------------
-            val localError = when {
-                password.isNotBlank() && confirmPassword.isNotBlank()
-                        && password != confirmPassword -> "Passwords do not match"
-                else -> null
-            }
-
+            // -- Errors --------------------------------------------
             if (localError != null || uiState.errorMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -144,7 +162,7 @@ fun SignupScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // -- Sign up button ------------------------------------
             Button(
@@ -183,9 +201,8 @@ fun SignupScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // -- Back to login -------------------------------------
             TextButton(onClick = onBackToLogin) {
                 Text(
                     text = "Already have an account? Log in",
@@ -196,7 +213,7 @@ fun SignupScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

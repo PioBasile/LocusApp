@@ -66,7 +66,7 @@ class ProfileViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
             try {
-                val response = repository.changeProfilePicture(token, imageFile)
+                val response = repository.uploadProfilePicture(token, imageFile)
 
                 // Si ça réussit, on recharge le profil pour afficher la nouvelle image
                 val updatedProfile = repository.getProfile(token)
@@ -75,7 +75,7 @@ class ProfileViewModel(
                     it.copy(
                         profile = updatedProfile,
                         isLoading = false,
-                        successMessage = response.message ?: "Photo mise à jour avec succès !"
+                        successMessage = "Photo mise à jour avec succès !"
                     )
                 }
             } catch (e: Exception) {

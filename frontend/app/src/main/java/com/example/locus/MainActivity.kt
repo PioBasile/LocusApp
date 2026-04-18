@@ -44,7 +44,10 @@ class MainActivity : ComponentActivity() {
                         errorMessage = uiState.errorMessage
                     )
                     !uiState.isSuccess && showSignup -> SignupScreen(
-                        onSignupSuccess = { showSignup = false },
+                        onSignupSuccess = { token ->
+                            showSignup = false
+                            viewModel.saveTokenFromSignup(token)
+                        },
                         onBackToLogin = { showSignup = false }
                     )
                     else -> {

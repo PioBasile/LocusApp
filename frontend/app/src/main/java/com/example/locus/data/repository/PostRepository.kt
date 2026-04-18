@@ -1,7 +1,9 @@
 package com.example.locus.data.repository
 
 import com.example.locus.data.model.Post
+import com.example.locus.data.remote.CommentResponse
 import com.example.locus.data.remote.PostResponse
+import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.remote.RetrofitClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -29,6 +31,11 @@ class PostRepository {
         }
     }
 
+    suspend fun getPublicProfile(userId: Int): PublicProfileResponse {
+        return api.getPublicProfile(userId)
+    }
+
+
     // -- Create ----------------------------------------------------
     suspend fun uploadPost(
         token: String,
@@ -52,4 +59,42 @@ class PostRepository {
             idLoc = locationPart
         )
     }
+
+    suspend fun deletePost(token: String, postId: Int): String {
+        return api.deletePost(token, postId)
+    }
+
+    suspend fun reportPost(token: String, postId: Int, comment: String, reason: String) {
+        api.reportPost(token, postId, comment, reason)
+    }
+
+    // -- Comments -------------------------------------------------------
+
+    suspend fun getComments(token: String, postId: Int): List<CommentResponse> {
+        return try {
+            api.getComments(token, postId)
+        } catch (e: Exception) {
+            println("Erreur chargement des commentaires : ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun addComment(token: String, postId: Int, comment: String) {
+        api.postComment(token, postId, comment)
+    }
+
+    // -- Like ------------------------------------------------------------
+    suspend fun likePost(token: String, postId: Int) {
+        api.likePost(token, postId)
+    }
+
+    suspend fun unlikePost(token: String, postId: Int) {
+        api.unlikePost(token, postId)
+    }
+
+    suspend fun getLikes(token: String): Int {
+        return api.getLikes(token)
+    }
+
+
 }

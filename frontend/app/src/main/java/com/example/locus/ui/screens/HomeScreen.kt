@@ -32,6 +32,7 @@ import com.example.locus.R
 import com.example.locus.data.model.Post
 import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.ui.components.BottomNav
+import com.example.locus.ui.components.CommentBottomSheet
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Postcard
 import com.example.locus.ui.components.Topbar
@@ -51,6 +52,10 @@ fun HomeScreen(
 
     val currentPosts by viewModel.posts.collectAsState()
     var currentGroup by remember { mutableStateOf<MyGroupResponse?>(null) }
+
+    var selectedPostIdForComments by remember { mutableStateOf<Int?>(null) }
+    val currentComments by viewModel.currentComments.collectAsState()
+    val isLoadingComments by viewModel.isLoadingComments.collectAsState()
 
 
     // 1. Charge les groupes au premier lancement (suppression du doublon)
@@ -165,7 +170,17 @@ fun HomeScreen(
                             locationName = null
                         )
 
-                        Postcard(post = postForUI)
+                        Postcard(
+                            post = postForUI,
+                            viewModel = viewModel,
+                            onCommentClick = {
+                                viewModel.loadCommentsForPost(token, postForUI.id)
+                                selectedPostIdForComments = postForUI.id
+                            },
+                            onLikeClick = { isNowLiked ->
+                                viewModel.toggleLike(token, postForUI.id, isNowLiked)
+                            }
+                        )
                     }
                 }
             }
@@ -175,6 +190,17 @@ fun HomeScreen(
         BottomNav(
             selected = NavDestination.HOME,
             onSelect = onNavigate
+        )
+    }
+
+    selectedPostIdForComments?.let { postId ->
+        CommentBottomSheet(
+            comments = currentComments,
+            isLoading = isLoadingComments,
+            onDismiss = { selectedPostIdForComments = null }, // Ferme le tiroir
+            onSendComment = { text ->
+                viewModel.addComment(token, postId, text)
+            }
         )
     }
 }

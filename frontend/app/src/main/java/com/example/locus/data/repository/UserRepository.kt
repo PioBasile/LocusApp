@@ -1,5 +1,6 @@
 package com.example.locus.data.repository
 
+import android.net.Uri
 import com.example.locus.data.remote.LoginRequest
 import com.example.locus.data.remote.LoginResponse
 import com.example.locus.data.remote.ProfileResponse
@@ -31,12 +32,13 @@ class UserRepository {
         return api.getProfile(token)
     }
 
-    suspend fun changeProfilePicture(token: String, imageFile: File): ChangePPResponse {
+    suspend fun uploadProfilePicture(token: String, imageFile: File) {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
+        val body = MultipartBody.Part.createFormData("profile_picture", imageFile.name, requestFile)
 
-        val imagePart = MultipartBody.Part.createFormData("profile_picture", imageFile.name, requestFile)
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
 
-        return api.changeProfilePicture(token, imagePart)
+        api.changeProfilePicture(authHeader, body)
     }
 
     // -- Social (Followers) ----------------------------------------

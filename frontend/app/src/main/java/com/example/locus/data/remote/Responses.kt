@@ -22,7 +22,7 @@ data class PostResponse(
 data class PublicProfileResponse(
     val id: Int,
     val username: String,
-    val ppurl: String
+    val ppurl: String?
 )
 
 data class ProfileResponse(
@@ -87,4 +87,17 @@ data class FollowerResponse(
 // -- Profile pic ----------------------------------------------------------------
 data class ChangePPResponse(
     val message: String,
+)
+
+// -- Comments ...................................................................
+data class CommentResponse(
+    val id: Int,
+
+    @SerializedName("user_id")
+    val userId: Int,
+
+    @SerializedName("post_id")
+    val postId: Int,
+
+    val commentaire: String
 )
