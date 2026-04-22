@@ -58,7 +58,8 @@ fun Topbar(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = selectedGroup?.name ?: "Select Group",
+                            text = if (selectedGroup?.id == 0) "Public"
+                            else selectedGroup?.name ?: "Select Group",
                             color = NavyDark,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
@@ -85,7 +86,7 @@ fun Topbar(
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = group.name,
+                                            text = if (group.id == 0) "Public" else group.name,
                                             color = NavyDark,
                                             fontSize = 14.sp
                                         )

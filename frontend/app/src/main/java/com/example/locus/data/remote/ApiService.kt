@@ -71,13 +71,14 @@ interface ApiService {
         @Query("id") postId: Int
     )
 
+    @FormUrlEncoded
     @POST("/report")
     suspend fun reportPost(
         @Header("Authorization") token: String,
         @Query("id") postId: Int,
-        @Query("comment") comment: String,
-        @Query("reason") reason: String
-    )
+        @Field("comment") comment: String,
+        @Field("reason") reason: String
+    ): String
 
 
 

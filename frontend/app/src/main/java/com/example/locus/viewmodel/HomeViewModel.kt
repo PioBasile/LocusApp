@@ -134,6 +134,15 @@ class HomeViewModel(
         }
     }
 
+    suspend fun getCommentCountForPost(token: String, postId: Int): Int {
+        return try {
+            val comments = postRepository.getComments(token, postId)
+            comments.size
+        } catch (e: Exception) {
+            0
+        }
+    }
+
     fun toggleLike(token: String, postId: Int, isNowLiked: Boolean) {
         viewModelScope.launch {
             try {
@@ -153,6 +162,44 @@ class HomeViewModel(
             postRepository.getPublicProfile(userId)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    // -- Follow a user ---------------------------------------------
+    fun followUser(token: String, targetUserId: Int) {
+        viewModelScope.launch {
+            try {
+                postRepository.followUser(token, targetUserId)
+            } catch (e: Exception) {
+                // silent fail — UI already toggled optimistically
+                android.util.Log.e("HomeViewModel", "Follow failed: ${e.message}")
+            }
+        }
+    }
+
+    // -- Report a post ---------------------------------------------
+    fun reportPost(token: String, postId: Int, reason: String, comment: String) {
+        viewModelScope.launch {
+            try {
+                postRepository.reportPost(token, postId, reason, comment)
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Report failed: ${e.message}")
+            }
+        }
+    }
+
+    // -- Delete a post ---------------------------------------------
+    fun deletePost(token: String, postId: Int) {
+        viewModelScope.launch {
+            try {
+                postRepository.deletePost(token, postId)
+                // Remove from local list immediately
+                uiState = uiState.copy(
+                    posts = uiState.posts.filter { it.id != postId }
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Delete failed: ${e.message}")
+            }
         }
     }
 }

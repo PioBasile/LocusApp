@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,17 +49,20 @@ fun AddPostScreen(
     var location by remember { mutableStateOf("") }
 
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedGroups by remember { mutableStateOf(setOf<String>()) }
     val scrollState = rememberScrollState()
 
     val myGroups by viewModel.userGroups.collectAsState()
     var selectedGroupIds by remember { mutableStateOf(setOf<Int>()) }
     var showGroupDialog by remember { mutableStateOf(false) }
 
+    var isPublic by remember { mutableStateOf(true) } // Activé par défaut si tu veux
+
+    val defaultGroup = myGroups.find { it.name.equals("Default", ignoreCase = true) }
+    val selectableGroups = myGroups.filter { it.id != defaultGroup?.id }
+
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> imageUri = uri }
-
 
     LaunchedEffect(Unit) {
         if (token.isNotEmpty() ) {
@@ -66,7 +70,6 @@ fun AddPostScreen(
         }
     }
 
-    // Observers pour les retours du ViewModel
     LaunchedEffect(viewModel.successMessage) {
         viewModel.successMessage?.let {
             Toast.makeText(context, "Post partagé avec succès !", Toast.LENGTH_SHORT).show()
@@ -90,7 +93,6 @@ fun AddPostScreen(
         Topbar()
 
         Spacer(modifier = Modifier.height(20.dp))
-
 
         Column(
             modifier = Modifier
@@ -202,22 +204,55 @@ fun AddPostScreen(
                     }
                 )
 
-                // -- Group dropdown --------------------------------
-
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "GROUPS",
+                        text = "VISIBILITY",
+                        color = NavyDark.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(White)
+                            .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(text = "Public Post", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(text = "Show in the global Explore feed", color = InputHint, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = isPublic,
+                            onCheckedChange = { isPublic = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = White,
+                                checkedTrackColor = GoldPrimary,
+                                uncheckedThumbColor = InputHint,
+                                uncheckedTrackColor = Color.LightGray
+                            )
+                        )
+                    }
+                }
+
+                // -- Group dropdown --------------------------------
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "SPECIFIC GROUPS",
                         color = NavyDark.copy(alpha = 0.5f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp
                     )
                     Box {
-                        // Affiche les noms des groupes sélectionnés
                         val groupDisplayText = if (selectedGroupIds.isEmpty()) {
-                            "Select groups"
+                            "Select groups (Optional)"
                         } else {
-                            myGroups.filter { it.id in selectedGroupIds }
+                            selectableGroups.filter { it.id in selectedGroupIds }
                                 .joinToString(", ") { it.name }
                         }
 
@@ -259,10 +294,12 @@ fun AddPostScreen(
                         title = { Text("Select Groups", color = NavyDark, fontWeight = FontWeight.Bold) },
                         text = {
                             Column(
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
                             ) {
-                                // On boucle sur les vrais groupes de la BDD !
-                                myGroups.forEach { group ->
+                                selectableGroups.forEach { group ->
                                     val isChecked = selectedGroupIds.contains(group.id)
                                     Surface(
                                         onClick = {
@@ -312,7 +349,10 @@ fun AddPostScreen(
                         imageUri?.let { uri ->
                             val imageFile = getFileFromUri(context, uri)
 
-                            val groupsListToPost = selectedGroupIds.toList()
+                            val groupsListToPost = selectedGroupIds.toMutableList()
+                            if (isPublic) {
+                                defaultGroup?.let { groupsListToPost.add(it.id) }
+                            }
 
                             if (imageFile != null) {
                                 viewModel.uploadPost(token, imageFile, caption, groupsListToPost, locationId = 1)
@@ -321,6 +361,7 @@ fun AddPostScreen(
                             }
                         }
                     },
+                    // Le bouton est cliquable même si pas de groupe sélectionné (si c'est public par exemple)
                     enabled = imageUri != null && caption.isNotBlank() && !viewModel.isLoading,
                     modifier = Modifier
                         .fillMaxWidth()

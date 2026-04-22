@@ -36,9 +36,7 @@ class UserRepository {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
         val body = MultipartBody.Part.createFormData("profile_picture", imageFile.name, requestFile)
 
-        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
-
-        api.changeProfilePicture(authHeader, body)
+        api.changeProfilePicture(token, body)
     }
 
     // -- Social (Followers) ----------------------------------------

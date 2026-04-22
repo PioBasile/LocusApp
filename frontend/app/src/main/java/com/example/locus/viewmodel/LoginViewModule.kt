@@ -3,6 +3,7 @@ package com.example.locus.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.repository.UserRepository
+import com.example.locus.utils.decodeUserIdFromToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,7 @@ data class LoginUiState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
     val token: String? = null,
+    val userId: Int? = null,
     val errorMessage: String? = null
 )
 
@@ -31,10 +33,12 @@ class UserViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
                 val response = userRepository.login(email, password)
+                val userId = decodeUserIdFromToken(response.token)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isSuccess = true,
-                    token = response.token
+                    token = response.token,
+                    userId = userId
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -45,19 +49,25 @@ class UserViewModel(
         }
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
-    }
-
     fun continueAsGuest() {
-        _uiState.value = _uiState.value.copy(isSuccess = true, token = null)
+        _uiState.value = _uiState.value.copy(
+            isSuccess = true,
+            token = null,
+            userId = null
+        )
     }
 
     fun saveTokenFromSignup(newToken: String) {
+        val userId = decodeUserIdFromToken(newToken)
         _uiState.value = _uiState.value.copy(
             isSuccess = true,
             token = newToken,
+            userId = userId,
             errorMessage = null
         )
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 }

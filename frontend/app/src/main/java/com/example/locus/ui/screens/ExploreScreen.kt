@@ -277,11 +277,15 @@ fun ExploreScreen(
                 }
                 else -> {
                     // Filter by search query
-                    val filtered = if (searchQuery.isBlank()) uiState.groups
-                    else uiState.groups.filter {
-                        it.name.contains(searchQuery, ignoreCase = true) ||
-                                it.description.contains(searchQuery, ignoreCase = true)
-                    }
+                    val filtered = uiState.groups
+                        .filter { it.id != 0 }  // hide Default group
+                        .let { groups ->
+                            if (searchQuery.isBlank()) groups
+                            else groups.filter {
+                                it.name.contains(searchQuery, ignoreCase = true) ||
+                                        it.description.contains(searchQuery, ignoreCase = true)
+                            }
+                        }
 
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp),

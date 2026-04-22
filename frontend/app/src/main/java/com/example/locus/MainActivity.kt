@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
                         when (currentNav) {
                             NavDestination.HOME -> HomeScreen(
                                 token = uiState.token ?: "",
+                                currentUserId = uiState.userId,
                                 isGuest = uiState.token == null,
                                 onNavigate = { currentNav = it }
                             )
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
                             )
                             NavDestination.PROFILE -> ProfileScreen(
                                 token = uiState.token ?: "",
+                                currentUserId = uiState.userId,
                                 onNavigate = { currentNav = it }
                             )
                         }

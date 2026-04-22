@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
@@ -18,59 +20,142 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.locus.R
 import com.example.locus.data.model.Post
 import com.example.locus.ui.theme.*
 import com.example.locus.utils.formatTimeAgo
-import androidx.compose.material.icons.filled.Favorite
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.locus.viewmodel.HomeViewModel
 
 @Composable
 fun Postcard(
     post: Post,
     viewModel: HomeViewModel,
+    currentUserId: Int? = null,
+    token: String = "",
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
+    onDeleted: () -> Unit = {}
 ) {
     key(post.id) {
         PostCardContent(
             post = post,
             viewModel = viewModel,
+            currentUserId = currentUserId,
+            token = token,
             onCommentClick = onCommentClick,
             onLikeClick = onLikeClick,
-
-            )
+            onDeleted = onDeleted
+        )
     }
 }
 
 @Composable
-private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick: () -> Unit = {},onLikeClick: (Boolean) -> Unit = {}) {
-
+private fun PostCardContent(
+    post: Post,
+    viewModel: HomeViewModel,
+    currentUserId: Int? = null,
+    token: String = "",
+    onCommentClick: () -> Unit = {},
+    onLikeClick: (Boolean) -> Unit = {},
+    onDeleted: () -> Unit = {}
+) {
     var authorName by remember { mutableStateOf(post.username ?: "User ${post.userId}") }
     var authorAvatarUrl by remember { mutableStateOf<String?>(null) }
     var isLoadingProfile by remember { mutableStateOf(true) }
-
     val locationName = post.locationName ?: "Unknown"
-    val imageCount = 1
 
     var isLiked by remember { mutableStateOf(false) }
     var likesCount by remember { mutableStateOf(0) }
 
-    LaunchedEffect(post.userId) {
+    var commentsCount by remember { mutableStateOf(0) }
+
+    // Follow state
+    var isFollowing by remember { mutableStateOf(false) }
+
+    // Dropdown menu
+    var showMenu by remember { mutableStateOf(false) }
+
+    // Report dialog
+    var showReportDialog by remember { mutableStateOf(false) }
+
+    // Delete confirm dialog
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val isMyPost = currentUserId != null && post.userId == currentUserId
+
+    LaunchedEffect(post.id) {
+        // 1. Charger le profil
         val profile = viewModel.getPublicProfile(post.userId)
         if (profile != null) {
             authorName = profile.username
             authorAvatarUrl = profile.ppurl
         }
         isLoadingProfile = false
+
+        // 2. Charger le compte de commentaires
+        if (token.isNotEmpty()) {
+            commentsCount = viewModel.getCommentCountForPost(token, post.id)
+        }
+    }
+
+    // Report dialog
+    if (showReportDialog) {
+        ReportDialog(
+            onDismiss = { showReportDialog = false },
+            onReport = { reason, comment ->
+                viewModel.reportPost(token, post.id, reason, comment)
+                showReportDialog = false
+            }
+        )
+    }
+
+    // Delete confirm dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            containerColor = White,
+            title = {
+                Text("Delete post?", color = NavyDark, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "This action cannot be undone.",
+                    color = MediumGray,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deletePost(token, post.id)
+                        showDeleteDialog = false
+                        onDeleted()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE53935)
+                    ),
+                    shape = RoundedCornerShape(50.dp)
+                ) {
+                    Text("Delete", color = White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel", color = MediumGray)
+                }
+            }
+        )
     }
 
     Card(
@@ -90,26 +175,38 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Avatar
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(if (isLoadingProfile) Color.LightGray else GoldPrimary),
+                        .background(White),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!authorAvatarUrl.isNullOrEmpty()) {
+                    if (isLoadingProfile) {
+                        // Optionnel : un petit indicateur de chargement au lieu de l'initiale
+                        CircularProgressIndicator(
+                            color = GoldPrimary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else if (!authorAvatarUrl.isNullOrBlank() && authorAvatarUrl != "img.jpg") {
+                        // L'utilisateur a une vraie photo
                         AsyncImage(
                             model = authorAvatarUrl,
                             contentDescription = "Avatar",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
-                    } else {
-                        Text(
-                            text = if (isLoadingProfile) "" else authorName.take(1).uppercase(),
-                            color = White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                    }
+                    else {
+                        // L'utilisateur n'a pas de photo : Logo Locus par défaut
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(id = R.drawable.ic_logo),
+                            contentDescription = "Default avatar",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
                         )
                     }
                 }
@@ -130,19 +227,105 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                     )
                 }
 
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "More",
-                        tint = GoldPrimary
-                    )
+                // -- Follow button (hidden for own posts) ----------
+                if (!isMyPost) {
+                    Button(
+                        onClick = {
+                            isFollowing = !isFollowing
+                            viewModel.followUser(token, post.userId)
+                        },
+                        shape = RoundedCornerShape(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isFollowing)
+                                White.copy(alpha = 0.15f)
+                            else
+                                GoldPrimary,
+                            contentColor = White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(
+                            text = if (isFollowing) "Following" else "Follow",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                // -- 3-dot menu ------------------------------------
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "More",
+                            tint = GoldPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(White)
+                    ) {
+                        // Report — always visible
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Flag,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE53935),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text("Report", color = Color(0xFFE53935), fontSize = 14.sp)
+                                }
+                            },
+                            onClick = {
+                                showMenu = false
+                                showReportDialog = true
+                            }
+                        )
+
+                        // Delete — only for own posts
+                        if (isMyPost) {
+                            HorizontalDivider(color = LightGray, thickness = 0.5.dp)
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = null,
+                                            tint = NavyDark,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text("Delete post", color = NavyDark, fontSize = 14.sp)
+                                    }
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
-            // -- Image -------
+            // -- Image ---------------------------------------------
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -157,42 +340,6 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                         .wrapContentHeight()
                         .clip(RoundedCornerShape(12.dp))
                 )
-
-                if (imageCount > 1) {
-                    // Badge "1/X"
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(10.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "1/$imageCount",
-                            color = White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Points de pagination
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        repeat(imageCount) { index ->
-                            val isSelected = index == 0
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) GoldPrimary else White.copy(alpha = 0.6f))
-                            )
-                        }
-                    }
-                }
             }
 
             // -- Actions row ---------------------------------------
@@ -203,35 +350,31 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Actions de gauche (Like, Comment, Save)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     PostActionItem(
                         icon = {
                             IconButton(
                                 onClick = {
-                                    isLiked = !isLiked // Inverse l'état
+                                    isLiked = !isLiked
                                     likesCount = if (isLiked) likesCount + 1 else likesCount - 1
-                                    onLikeClick(isLiked) // Prévient le ViewModel
+                                    onLikeClick(isLiked)
                                 },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
-                                    // Change l'icône si c'est liké
-                                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                    imageVector = if (isLiked) Icons.Filled.Favorite
+                                    else Icons.Filled.FavoriteBorder,
                                     contentDescription = "Like",
-                                    // Change la couleur (Rouge si liké, Or sinon)
                                     tint = if (isLiked) Color(0xFFE53935) else GoldPrimary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                         },
-                        count = likesCount // Affiche la vraie variable
+                        count = likesCount
                     )
-
 
                     PostActionItem(
                         icon = {
-                            // Wrap the Icon in an IconButton to make it clickable
                             IconButton(
                                 onClick = onCommentClick,
                                 modifier = Modifier.size(24.dp)
@@ -244,12 +387,8 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                                 )
                             }
                         },
-                        count = 676
+                        count = commentsCount
                     )
-//                    PostActionItem(
-//                        icon = { Icon(Icons.Filled.BookmarkBorder, contentDescription = "Bookmark", tint = GoldPrimary, modifier = Modifier.size(22.dp)) },
-//                        count = 676
-//                    )
                 }
 
                 // Location chip
@@ -286,7 +425,7 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
                 }
             }
 
-            // -- Caption -------------------------------------------------------------------
+            // -- Caption -------------------------------------------
             Text(
                 text = buildAnnotatedString {
                     withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = White)) {
@@ -306,6 +445,127 @@ private fun PostCardContent(post: Post, viewModel: HomeViewModel,onCommentClick:
             )
         }
     }
+}
+
+// -- Report dialog -------------------------------------------------------------
+@Composable
+private fun ReportDialog(
+    onDismiss: () -> Unit,
+    onReport: (reason: String, comment: String) -> Unit
+) {
+    val reasons = listOf("Spam", "Inappropriate content", "Harassment", "Misinformation", "Other")
+    var selectedReason by remember { mutableStateOf(reasons[0]) }
+    var comment by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = White,
+        title = {
+            Text("Report post", color = NavyDark, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Why are you reporting this post?",
+                    color = MediumGray,
+                    fontSize = 13.sp
+                )
+
+                // Reason dropdown
+                Box {
+                    OutlinedTextField(
+                        value = selectedReason,
+                        onValueChange = {},
+                        readOnly = true,
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        trailingIcon = {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = null,
+                                    tint = NavyDark
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = InputBorder,
+                            focusedBorderColor = NavyDark,
+                            unfocusedTextColor = NavyDark,
+                            focusedTextColor = NavyDark
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Transparent overlay
+                    Button(
+                        onClick = { expanded = true },
+                        modifier = Modifier.matchParentSize(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = Color.Transparent
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {}
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.background(White)
+                    ) {
+                        reasons.forEach { reason ->
+                            DropdownMenuItem(
+                                text = { Text(reason, color = NavyDark, fontSize = 14.sp) },
+                                onClick = {
+                                    selectedReason = reason
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Optional comment
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    placeholder = {
+                        Text(
+                            "Additional details (optional)",
+                            color = InputHint,
+                            fontSize = 13.sp
+                        )
+                    },
+                    maxLines = 3,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = OffWhite,
+                        focusedContainerColor = OffWhite,
+                        unfocusedBorderColor = InputBorder,
+                        focusedBorderColor = NavyDark,
+                        cursorColor = NavyDark,
+                        unfocusedTextColor = NavyDark,
+                        focusedTextColor = NavyDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onReport(selectedReason, comment) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                shape = RoundedCornerShape(50.dp)
+            ) {
+                Text("Report", color = White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MediumGray)
+            }
+        }
+    )
 }
 
 @Composable

@@ -60,14 +60,6 @@ class PostRepository {
         )
     }
 
-    suspend fun deletePost(token: String, postId: Int): String {
-        return api.deletePost(token, postId)
-    }
-
-    suspend fun reportPost(token: String, postId: Int, comment: String, reason: String) {
-        api.reportPost(token, postId, comment, reason)
-    }
-
     // -- Comments -------------------------------------------------------
 
     suspend fun getComments(token: String, postId: Int): List<CommentResponse> {
@@ -96,5 +88,19 @@ class PostRepository {
         return api.getLikes(token)
     }
 
+    // -- Follow a user ---------------------------------------------
+    suspend fun followUser(token: String, targetUserId: Int): String {
+        return api.followUser(token, targetUserId)
+    }
+
+    // -- Report a post ---------------------------------------------
+    suspend fun reportPost(token: String, postId: Int, reason: String, comment: String): String {
+        return api.reportPost(token, postId, reason, comment)
+    }
+
+    // -- Delete a post ---------------------------------------------
+    suspend fun deletePost(token: String, postId: Int): String {
+        return api.deletePost(token, postId)
+    }
 
 }

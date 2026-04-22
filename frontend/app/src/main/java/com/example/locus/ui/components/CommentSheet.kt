@@ -18,11 +18,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.locus.R
 import com.example.locus.data.remote.CommentResponse
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.HomeViewModel
@@ -33,6 +35,7 @@ import com.example.locus.viewmodel.HomeViewModel
 fun CommentBottomSheet(
     comments: List<CommentResponse>,
     isLoading: Boolean,
+    viewModel: HomeViewModel,
     onDismiss: () -> Unit,
     onSendComment: (String) -> Unit
 ) {
@@ -44,7 +47,7 @@ fun CommentBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = White,
-        dragHandle = null, // we draw our own
+        dragHandle = null,
         modifier = Modifier.fillMaxHeight(0.82f)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -60,7 +63,6 @@ fun CommentBottomSheet(
                     )
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                // Drag pill
                 Box(
                     modifier = Modifier
                         .width(36.dp)
@@ -136,7 +138,7 @@ fun CommentBottomSheet(
                             items(comments) { comment ->
                                 CommentRow(
                                     comment = comment,
-                                    viewModel = HomeViewModel()
+                                    viewModel = viewModel
                                 )
                             }
                         }
@@ -260,16 +262,20 @@ fun CommentRow(comment: CommentResponse, viewModel: HomeViewModel) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
     ) {
-        // Avatar
         Box(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(if (isLoadingProfile) LightGray else GoldPrimary),
+                .background(White), // Fond toujours blanc pour que le logo ressorte bien
             contentAlignment = Alignment.Center
         ) {
-            if (avatarUrl != null) {
-                // Si le mec a une photo de profil, on l'affiche avec Coil
+            if (isLoadingProfile) {
+                CircularProgressIndicator(
+                    color = GoldPrimary,
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            } else if (!avatarUrl.isNullOrBlank() && avatarUrl != "img.jpg") {
                 AsyncImage(
                     model = avatarUrl,
                     contentDescription = "Avatar",
@@ -277,12 +283,12 @@ fun CommentRow(comment: CommentResponse, viewModel: HomeViewModel) {
                     contentScale = ContentScale.Crop
                 )
             } else {
-                // Sinon on met la 1ère lettre de son pseudo (ou rien si ça charge)
-                Text(
-                    text = if (isLoadingProfile) "" else username.take(1).uppercase(),
-                    color = White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                androidx.compose.foundation.Image(
+                    painter = painterResource(id = R.drawable.ic_logo),
+                    contentDescription = "Default avatar",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp) // Règle la taille du logo ici
                 )
             }
         }

@@ -42,6 +42,7 @@ import com.example.locus.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     token: String = "",
+    currentUserId: Int? = null,
     isGuest: Boolean = false,
     onNavigate: (NavDestination) -> Unit = {},
     viewModel: HomeViewModel = viewModel()
@@ -58,11 +59,12 @@ fun HomeScreen(
     val isLoadingComments by viewModel.isLoadingComments.collectAsState()
 
 
-    // 1. Charge les groupes au premier lancement (suppression du doublon)
-        LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         if (token.isNotEmpty()) {
             viewModel.loadUserGroups(token)
         }
+        // Load public group for everyone including guests
+        viewModel.loadPostsForGroup(token, 0)
     }
 
     // 2. Sélectionne le premier groupe et charge ses posts
@@ -106,9 +108,6 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when {
-                isGuest -> {
-                    GuestBanner()
-                }
                 uiState.isLoading -> {
                     Box(
                         modifier = Modifier.fillMaxWidth().height(200.dp),
@@ -173,6 +172,7 @@ fun HomeScreen(
                         Postcard(
                             post = postForUI,
                             viewModel = viewModel,
+                            currentUserId = currentUserId,
                             onCommentClick = {
                                 viewModel.loadCommentsForPost(token, postForUI.id)
                                 selectedPostIdForComments = postForUI.id
@@ -197,6 +197,7 @@ fun HomeScreen(
         CommentBottomSheet(
             comments = currentComments,
             isLoading = isLoadingComments,
+            viewModel = viewModel,
             onDismiss = { selectedPostIdForComments = null }, // Ferme le tiroir
             onSendComment = { text ->
                 viewModel.addComment(token, postId, text)

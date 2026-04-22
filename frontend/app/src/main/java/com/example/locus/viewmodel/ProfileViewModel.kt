@@ -8,13 +8,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.ProfileResponse
 import com.example.locus.data.repository.UserRepository
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-
 
 data class ProfileUiState(
     val profile: ProfileResponse? = null,
@@ -31,21 +31,21 @@ class ProfileViewModel(
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    // -- Chargement des données initiales --------------------------
-
+    // -- Load profile + followers in parallel ----------------------
     fun loadFullProfile(token: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                // On peut lancer les deux requêtes en parallèle si on veut,
-                // mais les faire à la suite est plus simple pour gérer les erreurs
-                val profileData = repository.getProfile(token)
-                val followersData = repository.getFollowers(token)
+                val profileDeferred = async { repository.getProfile(token) }
+                val followersDeferred = async { repository.getFollowers(token) }
+
+                val profile = profileDeferred.await()
+                val followers = followersDeferred.await()
 
                 _uiState.update {
                     it.copy(
-                        profile = profileData,
-                        followers = followersData,
+                        profile = profile,
+                        followers = followers,
                         isLoading = false
                     )
                 }
@@ -53,83 +53,73 @@ class ProfileViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Erreur de chargement : ${e.message}"
+                        errorMessage = "Failed to load profile: ${e.message}"
                     )
                 }
             }
         }
     }
 
-    // -- Modification de la photo de profil ------------------------
-
+    // -- Update profile picture ------------------------------------
     fun updateProfilePicture(token: String, imageFile: File) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
             try {
-                val response = repository.uploadProfilePicture(token, imageFile)
-
-                // Si ça réussit, on recharge le profil pour afficher la nouvelle image
+                repository.uploadProfilePicture(token, imageFile)
+                // Reload profile to show new picture
                 val updatedProfile = repository.getProfile(token)
-
                 _uiState.update {
                     it.copy(
                         profile = updatedProfile,
                         isLoading = false,
-                        successMessage = "Photo mise à jour avec succès !"
+                        successMessage = "Profile picture updated!"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Échec de l'upload : ${e.message}"
+                        errorMessage = "Upload failed: ${e.message}"
                     )
                 }
             }
         }
     }
 
-    // -- Actions Sociales (Follow / Unfollow) ----------------------
-
+    // -- Follow ----------------------------------------------------
     fun followUser(token: String, targetUserId: Int) {
         viewModelScope.launch {
             try {
                 val response = repository.followUser(token, targetUserId)
                 _uiState.update { it.copy(successMessage = response) }
-
-                // Optionnel : recharger les followers si c'est nécessaire pour l'UI
-                // loadFullProfile(token)
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Erreur lors du follow : ${e.message}") }
+                _uiState.update { it.copy(errorMessage = "Follow failed: ${e.message}") }
             }
         }
     }
 
+    // -- Unfollow --------------------------------------------------
     fun unfollowUser(token: String, targetUserId: Int) {
         viewModelScope.launch {
             try {
                 val response = repository.unfollowUser(token, targetUserId)
                 _uiState.update { it.copy(successMessage = response) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Erreur lors du unfollow : ${e.message}") }
+                _uiState.update { it.copy(errorMessage = "Unfollow failed: ${e.message}") }
             }
         }
     }
 
-    // -- Nettoyage des messages ------------------------------------
-
+    // -- Clear messages --------------------------------------------
     fun clearMessages() {
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
     }
 
+    // -- Factory ---------------------------------------------------
     object ProfileViewModelFactory {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                // Ici, tu indiques comment créer le ViewModel
-                // Tu instancies le UserRepository dont il a besoin
-                ProfileViewModel(
-                    repository = UserRepository()
-                )
+                ProfileViewModel(repository = UserRepository())
             }
         }
     }
