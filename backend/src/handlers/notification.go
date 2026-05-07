@@ -53,10 +53,17 @@ func NotifyGroupMembersPush(groupIDs []int, authorID int, postDescription string
     }
 
     // 4. Envoi
-    br, err := client.SendMulticast(ctx, message)
+    br, err := client.SendEachForMulticast(ctx, message)
     if err != nil {
-        log.Printf("Erreur lors de l'envoi : %v", err)
+        log.Printf("Erreur critique Firebase : %v", err)
     } else {
-        log.Printf("%d notifications envoyées avec succès", br.SuccessCount)
+        log.Printf("%d notifications envoyées, %d échecs", br.SuccessCount, br.FailureCount)
+    
+    // AJOUTEZ CECI POUR VOIR L'ERREUR DÉTAILLÉE PAR JETON
+    for i, resp := range br.Responses {
+        if !resp.Success {
+            log.Printf("Échec pour le token [%s] : %v", tokens[i], resp.Error)
+        }
     }
+}
 }

@@ -23,7 +23,7 @@ check() {
     fi
 }
 
-sudo rm -rf ./uploads/posts/* ./uploads/groupes_pic/* ./uploads/profiles_pic/*
+sudo rm -rf ./uploads/posts/* ./uploads/groupes_pic/* ./uploads/profiles_pic/* 
 
 echo "=== DÉMARRAGE DES TESTS DE L'API ==="
 
@@ -77,7 +77,6 @@ echo "[AUTH] Accès route protégée token invalide..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/profile" \
     -H "Authorization: token.bidon.xxx")
 check "route protégée token invalide → 401" "$STATUS" 401
-
 # ────────────────────────────────────────────────────
 # PROFIL
 # ────────────────────────────────────────────────────

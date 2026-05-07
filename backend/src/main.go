@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"backend/config"
 	"backend/db"
@@ -10,6 +11,9 @@ import (
 )
 
 func main() {
+
+	initDirectories()
+
 	// Initialize configuration
 	if err := config.Init(); err != nil {
 		log.Fatal("Failed to initialize config:", err)
@@ -32,4 +36,22 @@ func main() {
 	if err := server.Start(database); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+
+func initDirectories() {
+    // Liste des dossiers requis pour les uploads
+    dirs := []string{
+        "./uploads/posts",
+        "./uploads/groupes_pic",
+        "./uploads/profiles_pic",
+    }
+
+    for _, dir := range dirs {
+        // MkdirAll ne fait rien si le dossier existe déjà
+        err := os.MkdirAll(dir, 0755)
+        if err != nil {
+            log.Fatalf("Erreur critique : impossible de créer le dossier %s : %v", dir, err)
+        }
+    }
 }

@@ -6,6 +6,7 @@ COPY ./src/go.mod ./src/go.sum ./
 RUN go mod download
 
 COPY ./src .
+COPY locusKey.json .
 
 RUN go build -o main .
 
