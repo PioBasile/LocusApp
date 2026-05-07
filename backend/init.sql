@@ -4,7 +4,8 @@ CREATE TABLE Utilisateurs (
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    url_pp TEXT
+    url_pp TEXT,
+    fcm_token TEXT
 );
 
 -- Groupes FIRST since Publications references it

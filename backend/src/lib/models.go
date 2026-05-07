@@ -7,6 +7,7 @@ type User struct {
 	Email          string `json:"email" db:"email"`
 	Username       string `json:"username" db:"username"`
 	ProfilePicture string `json:"ppurl" db:"ppurl"`
+	FCMToken       string `json:"fcm_token" db:"fcm_token"`
 }
 
 // LoginRequest represents the login request payload

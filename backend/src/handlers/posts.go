@@ -99,10 +99,13 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go NotifyGroupMembersPush(groupIDs, userID, description)
+	
 	if _, err := io.Copy(dst, file); err != nil {
 		http.Error(w, "Erreur lors de l'écriture de l'image", http.StatusInternalServerError)
 		return
 	}
+
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Post créé avec succès ! Groupes associés : %v", groupIDs)

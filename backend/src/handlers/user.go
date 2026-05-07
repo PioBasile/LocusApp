@@ -113,3 +113,26 @@ func GetUserGroupsHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(groupsID)
 }
+
+// pour les notifs
+func UpdateFCMTokenHandler(w http.ResponseWriter, r *http.Request) {
+    userID := r.Context().Value(UserIDKey).(int)
+    
+    var data struct {
+        Token string `json:"fcm_token"`
+    }
+    
+    if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+        http.Error(w, "Données invalides", http.StatusBadRequest)
+        return
+    }
+
+    query := `UPDATE Utilisateurs SET fcm_token = $1 WHERE usr_id = $2`
+    _, err := db.Exec(query, data.Token, userID)
+    if err != nil {
+        http.Error(w, "Erreur serveur", http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+}

@@ -40,6 +40,7 @@ func setupRoutes() {
 	http.HandleFunc("/reportPost", handlers.IsAuthorized(handlers.ReportPostHandler))
 	http.HandleFunc("/comment", handlers.IsAuthorized(handlers.CommentHandler))
 	http.HandleFunc("/deletePost", handlers.IsAuthorized(handlers.DeletePostHandler))
+	http.HandleFunc("/updateFCMToken", handlers.IsAuthorized(handlers.UpdateFCMTokenHandler))
 
 	
 	
