@@ -58,9 +58,9 @@ CREATE TABLE Commentaires (
 );
 
 CREATE TABLE Likes (
+    id_like SERIAL PRIMARY KEY,
     id_pub INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
-    id_user INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
-    PRIMARY KEY (id_pub)
+    id_user INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE
 );
 
 CREATE TABLE Reports (
