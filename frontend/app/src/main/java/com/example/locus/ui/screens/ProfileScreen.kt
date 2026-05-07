@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,27 +46,12 @@ data class ProfilePost(
     val likeCount: Int
 )
 
-private val dummyPhotos = List(12) { i ->
-    ProfilePost(
-        id = i,
-        imageUrl = "https://picsum.photos/seed/post$i/300/300",
-        likeCount = 210
-    )
-}
-
-private val dummyPins = List(9) { i ->
-    ProfilePost(
-        id = i + 100,
-        imageUrl = "https://picsum.photos/seed/pin$i/300/300",
-        likeCount = (50..300).random()
-    )
-}
-
 enum class ProfileTab { PHOTOS, PINS }
 
 @Composable
 fun ProfileScreen(
     onNavigate: (NavDestination) -> Unit = {},
+    onLogout: () -> Unit = {},
     viewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.ProfileViewModelFactory.Factory),
     token: String = "",
     currentUserId: Int? = null
@@ -72,11 +59,24 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(ProfileTab.PHOTOS) }
+    var settingsExpanded by remember { mutableStateOf(false) }
+    var selectedGroupFilter by remember { mutableStateOf<Int?>(null) }
     val scrollState = rememberScrollState()
-    val posts = if (selectedTab == ProfileTab.PHOTOS) dummyPhotos else dummyPins
 
-    // Load profile on launch
-    LaunchedEffect(token) {
+    // Groups that actually appear in the user's posts (for filter chips)
+    val postGroupIds = remember(uiState.userPosts) { uiState.userPosts.flatMap { it.groupe }.toSet() }
+    val filterGroups = remember(uiState.userGroupDetails, postGroupIds) {
+        uiState.userGroupDetails.filter { it.id == 0 || it.id in postGroupIds }
+    }
+
+    val posts = remember(uiState.userPosts, selectedGroupFilter) {
+        uiState.userPosts
+            .filter { selectedGroupFilter == null || it.groupe.contains(selectedGroupFilter) }
+            .map { p -> ProfilePost(id = p.id, imageUrl = p.imageUrl, likeCount = 0) }
+    }
+
+    // Reload every time this screen enters the composition
+    LaunchedEffect(Unit) {
         if (token.isNotBlank()) viewModel.loadFullProfile(token)
     }
 
@@ -141,16 +141,43 @@ fun ProfileScreen(
                 )
 
                 // Settings
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Settings",
-                        tint = White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(22.dp)
-                    )
+                Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { settingsExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            tint = White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = settingsExpanded,
+                        onDismissRequest = { settingsExpanded = false },
+                        modifier = Modifier.background(White)
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "Log out",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Logout,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                settingsExpanded = false
+                                onLogout()
+                            }
+                        )
+                    }
                 }
 
                 Column(
@@ -244,14 +271,11 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(28.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatItem(label = "Posts", value = "—")
+                        StatItem(label = "Posts", value = uiState.userPosts.size.toString())
                         StatDivider()
-                        StatItem(label = "Groups", value = "—")
+                        StatItem(label = "Groups", value = uiState.groupCount.toString())
                         StatDivider()
-                        StatItem(
-                            label = "Followers",
-                            value = uiState.followers.size.toString()
-                        )
+                        StatItem(label = "Followers", value = uiState.followers.size.toString())
                     }
                 }
             }
@@ -294,26 +318,69 @@ fun ProfileScreen(
 
             HorizontalDivider(color = LightGray, thickness = 0.5.dp)
 
-            Spacer(modifier = Modifier.height(10.dp))
+            // -- Group filter chips --------------------------------
+            if (filterGroups.size > 1) {
+                val chipScrollState = rememberScrollState()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(chipScrollState)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GroupFilterChip(
+                        label = "All",
+                        selected = selectedGroupFilter == null,
+                        onClick = { selectedGroupFilter = null }
+                    )
+                    filterGroups.forEach { group ->
+                        GroupFilterChip(
+                            label = group.name,
+                            selected = selectedGroupFilter == group.id,
+                            onClick = { selectedGroupFilter = if (selectedGroupFilter == group.id) null else group.id }
+                        )
+                    }
+                }
+                HorizontalDivider(color = LightGray, thickness = 0.5.dp)
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // -- Photo grid ----------------------------------------
-            Column(
-                modifier = Modifier.padding(horizontal = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                posts.chunked(3).forEach { rowPosts ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        rowPosts.forEach { post ->
-                            PhotoGridItem(
-                                post = post,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        repeat(3 - rowPosts.size) {
-                            Spacer(modifier = Modifier.weight(1f))
+            if (posts.isEmpty() && !uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.Text(
+                        text = if (selectedGroupFilter != null) "No posts in this group" else "No posts yet",
+                        color = MediumGray,
+                        fontSize = 14.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    posts.chunked(3).forEach { rowPosts ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            rowPosts.forEach { post ->
+                                PhotoGridItem(
+                                    post = post,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(3 - rowPosts.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -386,6 +453,34 @@ private fun ProfileTabChip(
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             fontSize = 13.sp
         )
+    }
+}
+
+// -- Group filter chip ---------------------------------------------------------
+@Composable
+private fun GroupFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) NavyDark else OffWhite
+    val textColor = if (selected) White else NavyDark
+    val borderColor = if (selected) NavyDark else LightGray
+
+    Box(
+        modifier = Modifier
+            .border(1.dp, borderColor, RoundedCornerShape(50.dp))
+            .background(bg, RoundedCornerShape(50.dp))
+            .clip(RoundedCornerShape(50.dp))
+    ) {
+        TextButton(
+            onClick = onClick,
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.height(32.dp)
+        ) {
+            Text(
+                text = label,
+                color = textColor,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            )
+        }
     }
 }
 

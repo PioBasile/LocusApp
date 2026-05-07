@@ -57,8 +57,7 @@ fun AddPostScreen(
 
     var isPublic by remember { mutableStateOf(true) } // Activé par défaut si tu veux
 
-    val defaultGroup = myGroups.find { it.name.equals("Default", ignoreCase = true) }
-    val selectableGroups = myGroups.filter { it.id != defaultGroup?.id }
+    val selectableGroups = myGroups
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -224,7 +223,7 @@ fun AddPostScreen(
                     ) {
                         Column {
                             Text(text = "Public Post", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text(text = "Show in the global Explore feed", color = InputHint, fontSize = 12.sp)
+                            Text(text = "Show in the global Public Posts feed", color = InputHint, fontSize = 12.sp)
                         }
                         Switch(
                             checked = isPublic,
@@ -350,12 +349,15 @@ fun AddPostScreen(
                             val imageFile = getFileFromUri(context, uri)
 
                             val groupsListToPost = selectedGroupIds.toMutableList()
-                            if (isPublic) {
-                                defaultGroup?.let { groupsListToPost.add(it.id) }
+                            if (isPublic && !groupsListToPost.contains(0)) {
+                                groupsListToPost.add(0)
                             }
 
+                            val fullDescription = if (location.isBlank()) caption
+                                                  else "$caption\n---loc:$location"
+
                             if (imageFile != null) {
-                                viewModel.uploadPost(token, imageFile, caption, groupsListToPost, locationId = 1)
+                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1)
                             } else {
                                 Toast.makeText(context, "Erreur avec l'image", Toast.LENGTH_SHORT).show()
                             }

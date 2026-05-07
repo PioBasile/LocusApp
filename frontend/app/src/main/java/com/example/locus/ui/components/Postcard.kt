@@ -73,12 +73,15 @@ private fun PostCardContent(
     var authorName by remember { mutableStateOf(post.username ?: "User ${post.userId}") }
     var authorAvatarUrl by remember { mutableStateOf<String?>(null) }
     var isLoadingProfile by remember { mutableStateOf(true) }
-    val locationName = post.locationName ?: "Unknown"
+    val locationName = post.locationName
 
-    var isLiked by remember { mutableStateOf(false) }
-    var likesCount by remember { mutableStateOf(0) }
+    val likedPostIds by viewModel.likedPostIds.collectAsState()
+    val likeCounts by viewModel.likeCounts.collectAsState()
+    val commentCounts by viewModel.commentCounts.collectAsState()
 
-    var commentsCount by remember { mutableStateOf(0) }
+    val isLiked = post.id in likedPostIds
+    val likesCount = likeCounts[post.id] ?: 0
+    val commentsCount = commentCounts[post.id] ?: 0
 
     // Follow state
     var isFollowing by remember { mutableStateOf(false) }
@@ -95,7 +98,6 @@ private fun PostCardContent(
     val isMyPost = currentUserId != null && post.userId == currentUserId
 
     LaunchedEffect(post.id) {
-        // 1. Charger le profil
         val profile = viewModel.getPublicProfile(post.userId)
         if (profile != null) {
             authorName = profile.username
@@ -103,9 +105,9 @@ private fun PostCardContent(
         }
         isLoadingProfile = false
 
-        // 2. Charger le compte de commentaires
         if (token.isNotEmpty()) {
-            commentsCount = viewModel.getCommentCountForPost(token, post.id)
+            viewModel.getCommentCountForPost(token, post.id)
+            viewModel.loadLikesForPost(token, post.id)
         }
     }
 
@@ -355,9 +357,9 @@ private fun PostCardContent(
                         icon = {
                             IconButton(
                                 onClick = {
-                                    isLiked = !isLiked
-                                    likesCount = if (isLiked) likesCount + 1 else likesCount - 1
-                                    onLikeClick(isLiked)
+                                    if (token.isNotEmpty()) {
+                                        viewModel.toggleLike(token, post.id, !isLiked)
+                                    }
                                 },
                                 modifier = Modifier.size(24.dp)
                             ) {
@@ -391,37 +393,33 @@ private fun PostCardContent(
                     )
                 }
 
-                // Location chip
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(
-                            color = White.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(16.dp)
+                // Location chip — only shown when the post has a location
+                if (locationName != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(
+                                color = White.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            tint = GoldPrimary,
+                            modifier = Modifier.size(14.dp)
                         )
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = null,
-                        tint = GoldPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = locationName,
-                        color = White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Icon(
-                        imageVector = Icons.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = GoldPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = locationName,
+                            color = White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 

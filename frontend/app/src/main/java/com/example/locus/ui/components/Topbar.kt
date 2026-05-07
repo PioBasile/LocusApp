@@ -58,8 +58,10 @@ fun Topbar(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (selectedGroup?.id == 0) "Public"
-                            else selectedGroup?.name ?: "Select Group",
+                            text = when {
+                                selectedGroup == null || selectedGroup.id == 0 -> "Public Posts"
+                                else -> selectedGroup.name
+                            },
                             color = NavyDark,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
@@ -76,27 +78,36 @@ fun Topbar(
                         onDismissRequest = { expanded = false },
                         modifier = Modifier.background(White)
                     ) {
-                        if (groups.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("Aucun groupe", color = MediumGray, fontSize = 14.sp) },
-                                onClick = { expanded = false }
-                            )
-                        } else {
-                            groups.forEach { group ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = if (group.id == 0) "Public" else group.name,
-                                            color = NavyDark,
-                                            fontSize = 14.sp
-                                        )
-                                    },
-                                    onClick = {
-                                        onGroupChange(group)
-                                        expanded = false
-                                    }
+                        // Public Posts is always the first option
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "Public Posts",
+                                    color = if (selectedGroup == null || selectedGroup.id == 0) GoldPrimary else NavyDark,
+                                    fontWeight = if (selectedGroup == null || selectedGroup.id == 0) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 14.sp
                                 )
+                            },
+                            onClick = {
+                                onGroupChange(MyGroupResponse(id = 0, name = "Public Posts", isPrivate = false, description = "", imageUrl = null))
+                                expanded = false
                             }
+                        )
+                        groups.filter { it.id != 0 }.forEach { group ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = group.name,
+                                        color = if (selectedGroup?.id == group.id) GoldPrimary else NavyDark,
+                                        fontWeight = if (selectedGroup?.id == group.id) FontWeight.SemiBold else FontWeight.Normal,
+                                        fontSize = 14.sp
+                                    )
+                                },
+                                onClick = {
+                                    onGroupChange(group)
+                                    expanded = false
+                                }
+                            )
                         }
                     }
                 }

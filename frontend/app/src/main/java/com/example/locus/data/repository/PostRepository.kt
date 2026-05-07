@@ -84,8 +84,20 @@ class PostRepository {
         api.unlikePost(token, postId)
     }
 
-    suspend fun getLikes(token: String): Int {
-        return api.getLikes(token)
+    suspend fun getLikesForPost(token: String, postId: Int): Int {
+        return try {
+            api.getLikes(token, postId).likes_count
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    suspend fun getAllUserLikes(token: String): List<Int> {
+        return try {
+            api.getAllUserLikes(token)
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     // -- Follow a user ---------------------------------------------
@@ -103,4 +115,12 @@ class PostRepository {
         return api.deletePost(token, postId)
     }
 
+    // -- Nearby posts (public) -------------------------------------
+    suspend fun getNearbyPosts(gps: String): List<Int> {
+        return try {
+            api.getNearbyPosts(gps)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 }

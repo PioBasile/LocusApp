@@ -101,3 +101,6 @@ data class CommentResponse(
 
     val commentaire: String
 )
+
+// -- Likes ......................................................................
+data class LikesCountResponse(val likes_count: Int)

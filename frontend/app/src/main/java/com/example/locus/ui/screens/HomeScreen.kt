@@ -52,28 +52,19 @@ fun HomeScreen(
     val myGroups by viewModel.userGroups.collectAsState()
 
     val currentPosts by viewModel.posts.collectAsState()
+    // null = Public Posts (group 0)
     var currentGroup by remember { mutableStateOf<MyGroupResponse?>(null) }
 
     var selectedPostIdForComments by remember { mutableStateOf<Int?>(null) }
     val currentComments by viewModel.currentComments.collectAsState()
     val isLoadingComments by viewModel.isLoadingComments.collectAsState()
 
-
     LaunchedEffect(Unit) {
         if (token.isNotEmpty()) {
             viewModel.loadUserGroups(token)
+            viewModel.loadUserLikes(token)
         }
-        // Load public group for everyone including guests
         viewModel.loadPostsForGroup(token, 0)
-    }
-
-    // 2. Sélectionne le premier groupe et charge ses posts
-    LaunchedEffect(myGroups) {
-        if (currentGroup == null && myGroups.isNotEmpty()) {
-            val firstGroup = myGroups.first()
-            currentGroup = firstGroup
-            viewModel.loadPostsForGroup(token, firstGroup.id)
-        }
     }
 
 
@@ -131,8 +122,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    // Relance le chargement avec le groupe actuel si erreur
-                                    currentGroup?.let { viewModel.loadPostsForGroup(token, it.id) }
+                                    viewModel.loadPostsForGroup(token, currentGroup?.id ?: 0)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
                                 shape = RoundedCornerShape(50.dp)
@@ -157,28 +147,27 @@ fun HomeScreen(
                 }
                 else -> {
                     currentPosts.forEach { postResponse ->
+                        val descParts = postResponse.description.split("\n---loc:", limit = 2)
                         val postForUI = Post(
                             id = postResponse.id,
                             userId = postResponse.user_id,
                             username = "User ${postResponse.user_id}",
                             groupe = postResponse.groupe.firstOrNull() ?: 0,
-                            description = postResponse.description,
+                            description = descParts[0],
                             imageUrl = postResponse.imageUrl,
                             date = postResponse.date,
                             idLoc = postResponse.id_loc,
-                            locationName = null
+                            locationName = if (descParts.size > 1) descParts[1].trim() else null
                         )
 
                         Postcard(
                             post = postForUI,
                             viewModel = viewModel,
                             currentUserId = currentUserId,
+                            token = token,
                             onCommentClick = {
                                 viewModel.loadCommentsForPost(token, postForUI.id)
                                 selectedPostIdForComments = postForUI.id
-                            },
-                            onLikeClick = { isNowLiked ->
-                                viewModel.toggleLike(token, postForUI.id, isNowLiked)
                             }
                         )
                     }

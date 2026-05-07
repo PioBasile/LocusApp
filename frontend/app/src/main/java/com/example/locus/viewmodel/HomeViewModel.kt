@@ -95,7 +95,18 @@ class HomeViewModel(
         }
     }
 
-    // -- État des commentaires -----------------------------------------
+    // -- Likes state ---------------------------------------------------
+    private val _likedPostIds = MutableStateFlow<Set<Int>>(emptySet())
+    val likedPostIds: StateFlow<Set<Int>> = _likedPostIds.asStateFlow()
+
+    private val _likeCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val likeCounts: StateFlow<Map<Int, Int>> = _likeCounts.asStateFlow()
+
+    // -- Comment counts state ------------------------------------------
+    private val _commentCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val commentCounts: StateFlow<Map<Int, Int>> = _commentCounts.asStateFlow()
+
+    // -- Comment sheet state -------------------------------------------
     private val _currentComments = MutableStateFlow<List<CommentResponse>>(emptyList())
     val currentComments: StateFlow<List<CommentResponse>> = _currentComments.asStateFlow()
 
@@ -104,29 +115,38 @@ class HomeViewModel(
 
     // -- Fonctions -----------------------------------------------------
 
-    // Appelé quand on clique sur le bouton commentaire d'un post
+    fun loadUserLikes(token: String) {
+        viewModelScope.launch {
+            try {
+                val liked = postRepository.getAllUserLikes(token)
+                _likedPostIds.value = liked.toSet()
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Failed to load user likes: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun loadLikesForPost(token: String, postId: Int) {
+        val count = postRepository.getLikesForPost(token, postId)
+        _likeCounts.value = _likeCounts.value + (postId to count)
+    }
+
     fun loadCommentsForPost(token: String, postId: Int) {
         viewModelScope.launch {
             _isLoadingComments.value = true
-            // On vide la liste temporairement pour éviter de voir les commentaires du post précédent
             _currentComments.value = emptyList()
-
-            // Appel à repository
             val fetchedComments = postRepository.getComments(token, postId)
             _currentComments.value = fetchedComments
-
+            _commentCounts.value = _commentCounts.value + (postId to fetchedComments.size)
             _isLoadingComments.value = false
         }
     }
 
-    // Appelé quand on clique sur "Envoyer" dans le Bottom Sheet
     fun addComment(token: String, postId: Int, text: String) {
         if (text.isBlank()) return
-
         viewModelScope.launch {
             try {
                 postRepository.addComment(token, postId, text)
-                // On recharge directement les commentaires pour voir le nouveau apparaître !
                 loadCommentsForPost(token, postId)
             } catch (e: Exception) {
                 println("Erreur lors de l'ajout du commentaire : ${e.message}")
@@ -134,25 +154,38 @@ class HomeViewModel(
         }
     }
 
-    suspend fun getCommentCountForPost(token: String, postId: Int): Int {
-        return try {
+    suspend fun getCommentCountForPost(token: String, postId: Int) {
+        try {
             val comments = postRepository.getComments(token, postId)
-            comments.size
+            _commentCounts.value = _commentCounts.value + (postId to comments.size)
         } catch (e: Exception) {
-            0
+            // leave existing count unchanged
         }
     }
 
     fun toggleLike(token: String, postId: Int, isNowLiked: Boolean) {
+        // Optimistic update
+        if (isNowLiked) {
+            _likedPostIds.value = _likedPostIds.value + postId
+            _likeCounts.value = _likeCounts.value + (postId to ((_likeCounts.value[postId] ?: 0) + 1))
+        } else {
+            _likedPostIds.value = _likedPostIds.value - postId
+            _likeCounts.value = _likeCounts.value + (postId to maxOf(0, (_likeCounts.value[postId] ?: 0) - 1))
+        }
         viewModelScope.launch {
             try {
-                if (isNowLiked) {
-                    postRepository.likePost(token, postId)
-                } else {
-                    postRepository.unlikePost(token, postId)
-                }
+                if (isNowLiked) postRepository.likePost(token, postId)
+                else postRepository.unlikePost(token, postId)
             } catch (e: Exception) {
-                println("Erreur lors du like : ${e.message}")
+                // Revert optimistic update on failure
+                if (isNowLiked) {
+                    _likedPostIds.value = _likedPostIds.value - postId
+                    _likeCounts.value = _likeCounts.value + (postId to maxOf(0, (_likeCounts.value[postId] ?: 1) - 1))
+                } else {
+                    _likedPostIds.value = _likedPostIds.value + postId
+                    _likeCounts.value = _likeCounts.value + (postId to ((_likeCounts.value[postId] ?: 0) + 1))
+                }
+                android.util.Log.e("HomeViewModel", "Like failed: ${e.message}")
             }
         }
     }

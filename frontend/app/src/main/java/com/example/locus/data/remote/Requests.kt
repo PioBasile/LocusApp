@@ -15,3 +15,5 @@ data class LoginRequest(
     val avatarUri: Uri? = null
 )
 
+data class FCMTokenRequest(val fcm_token: String)
+

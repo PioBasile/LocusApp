@@ -1,12 +1,12 @@
 package com.example.locus.data.repository
 
 import android.net.Uri
+import com.example.locus.data.remote.FCMTokenRequest
 import com.example.locus.data.remote.LoginRequest
 import com.example.locus.data.remote.LoginResponse
 import com.example.locus.data.remote.ProfileResponse
 import com.example.locus.data.remote.RetrofitClient
 import com.example.locus.data.remote.SignupResponse
-
 import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.ChangePPResponse
 
@@ -55,5 +55,9 @@ class UserRepository {
             println("Error when getting followers  : ${e.message}")
             emptyList()
         }
+    }
+
+    suspend fun updateFCMToken(token: String, fcmToken: String) {
+        api.updateFCMToken(token, FCMTokenRequest(fcmToken))
     }
 }

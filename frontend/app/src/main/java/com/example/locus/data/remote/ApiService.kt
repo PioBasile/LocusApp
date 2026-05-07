@@ -62,8 +62,14 @@ interface ApiService {
 
     @GET("/getLikes")
     suspend fun getLikes(
-        @Header("Authorization") token: String)
-    : Int
+        @Header("Authorization") token: String,
+        @Query("id") postId: Int
+    ): LikesCountResponse
+
+    @GET("/getAllUserLikes")
+    suspend fun getAllUserLikes(
+        @Header("Authorization") token: String
+    ): List<Int>
 
     @POST("/unlike")
     suspend fun unlikePost(
@@ -72,13 +78,17 @@ interface ApiService {
     )
 
     @FormUrlEncoded
-    @POST("/report")
+    @POST("/reportPost")
     suspend fun reportPost(
         @Header("Authorization") token: String,
         @Query("id") postId: Int,
         @Field("comment") comment: String,
         @Field("reason") reason: String
     ): String
+
+    // -- Nearby posts (public) -------------------------------------
+    @GET("/getNearbyPosts")
+    suspend fun getNearbyPosts(@Query("gps") gps: String): List<Int>
 
 
 
@@ -155,5 +165,12 @@ interface ApiService {
     suspend fun changeProfilePicture(
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part
+    )
+
+    // -- Push notifications (protected) ----------------------------
+    @POST("/updateFCMToken")
+    suspend fun updateFCMToken(
+        @Header("Authorization") token: String,
+        @Body body: FCMTokenRequest
     )
 }

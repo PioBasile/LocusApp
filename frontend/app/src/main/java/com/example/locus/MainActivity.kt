@@ -73,7 +73,8 @@ class MainActivity : ComponentActivity() {
                             NavDestination.PROFILE -> ProfileScreen(
                                 token = uiState.token ?: "",
                                 currentUserId = uiState.userId,
-                                onNavigate = { currentNav = it }
+                                onNavigate = { currentNav = it },
+                                onLogout = { viewModel.logout() }
                             )
                         }
                     }

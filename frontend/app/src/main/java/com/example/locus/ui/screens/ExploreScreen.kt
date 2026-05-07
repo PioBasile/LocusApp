@@ -42,21 +42,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import coil.compose.AsyncImagePainter
 import android.util.Log
-
-// -- Dummy trending users (no backend endpoint yet) ----------------------------
-private data class TrendingUser(
-    val id: Int,
-    val displayName: String,
-    val username: String,
-    val avatarUrl: String
-)
-
-private val dummyUsers = listOf(
-    TrendingUser(1, "Jean Dupont", "@jeandupont", "https://picsum.photos/seed/user1/100/100"),
-    TrendingUser(2, "Marie Curie", "@mariecurie", "https://picsum.photos/seed/user2/100/100"),
-    TrendingUser(3, "Alex Martin", "@alexmartin", "https://picsum.photos/seed/user3/100/100"),
-    TrendingUser(4, "Sofia Loren", "@sofialoren", "https://picsum.photos/seed/user4/100/100"),
-)
+import androidx.compose.runtime.collectAsState
 
 // -- Screen --------------------------------------------------------------------
 
@@ -68,11 +54,17 @@ fun ExploreScreen(
 ) {
     val context = LocalContext.current
     val uiState = viewModel.uiState
+    val followers by viewModel.followers.collectAsState()
+    val followedUserIds by viewModel.followedUserIds.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
-    val followStates = remember { mutableStateMapOf<Int, Boolean>() }
     val scrollState = rememberScrollState()
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
 
+    LaunchedEffect(Unit) {
+        if (token.isNotEmpty()) {
+            viewModel.loadFollowers(token)
+        }
+    }
 
     // Join/create feedback
     LaunchedEffect(uiState.joinSuccess) {
@@ -89,6 +81,12 @@ fun ExploreScreen(
     }
     LaunchedEffect(uiState.createSuccess) {
         uiState.createSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearMessages()
+        }
+    }
+    LaunchedEffect(uiState.createError) {
+        uiState.createError?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.clearMessages()
         }
@@ -321,28 +319,49 @@ fun ExploreScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // -- Trending users (dummy for now) --------------------
-            Text(
-                text = "Trending Users",
-                color = NavyDark,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            // -- Followers section ---------------------------------
+            if (token.isNotEmpty()) {
+                Text(
+                    text = "Your Followers",
+                    color = NavyDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                dummyUsers.forEach { user ->
-                    val isFollowing = followStates[user.id] ?: false
-                    UserCard(
-                        user = user,
-                        isFollowing = isFollowing,
-                        onFollowClick = { followStates[user.id] = !isFollowing }
-                    )
+                if (followers.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No followers yet",
+                            color = MediumGray,
+                            fontSize = 13.sp,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        followers.forEach { follower ->
+                            val isFollowingBack = follower.id in followedUserIds
+                            UserCard(
+                                follower = follower,
+                                isFollowing = isFollowingBack,
+                                onFollowClick = {
+                                    if (isFollowingBack) viewModel.unfollowUser(token, follower.id)
+                                    else viewModel.followUser(token, follower.id)
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -454,7 +473,7 @@ private fun GroupCard(
 // -- User card -----------------------------------------------------------------
 @Composable
 private fun UserCard(
-    user: TrendingUser,
+    follower: com.example.locus.data.remote.FollowerResponse,
     isFollowing: Boolean,
     onFollowClick: () -> Unit
 ) {
@@ -470,31 +489,30 @@ private fun UserCard(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = user.avatarUrl,
-                contentDescription = user.displayName,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(GoldPrimary)
-            )
+                    .background(NavyDark),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = follower.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                    color = GoldPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = user.displayName,
-                    color = NavyDark,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = user.username,
-                    color = MediumGray,
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                text = follower.username,
+                color = NavyDark,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f)
+            )
 
             Button(
                 onClick = onFollowClick,
@@ -507,7 +525,7 @@ private fun UserCard(
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = if (isFollowing) "Following" else "Follow",
+                    text = if (isFollowing) "Following" else "Follow back",
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp
                 )
