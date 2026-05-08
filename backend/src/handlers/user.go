@@ -36,7 +36,6 @@ func GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetPublicProfileHandler retrieves a user's public profile information by ID
 func GetPublicProfileHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("id")
 	if userID == "" {
@@ -52,6 +51,16 @@ func GetPublicProfileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Utilisateur introuvable", http.StatusNotFound)
 		return
 	}
+
+	var posts []lib.PostResponse
+	postQuery := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation 
+				  FROM Publications WHERE id_publicateur = $1`
+	err = db.Select(&posts, postQuery, userID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des posts", http.StatusInternalServerError)
+		return
+	}
+	profile.Posts = posts
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
@@ -135,4 +144,24 @@ func UpdateFCMTokenHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     w.WriteHeader(http.StatusOK)
+}
+
+func ChangeUsernameHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+
+	Username := r.FormValue("username")
+	if Username == "" {
+		http.Error(w, "Nom d'utilisateur manquant", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE Utilisateurs SET username = $1 WHERE usr_id = $2`
+	_, err := db.Exec(query, Username, userID)
+	if err != nil {
+		http.Error(w, "Erreur serveur", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Nom d'utilisateur mis à jour avec succès !"})
 }

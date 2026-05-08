@@ -23,6 +23,8 @@ func setupRoutes() {
 	http.HandleFunc("/getNearbyPosts", handlers.GetNearbyPostsHandler)
 	http.HandleFunc("/getComments", handlers.GetCommentsHandler)
 	http.HandleFunc("/getLikes", handlers.GetLikesHandler)
+	http.HandleFunc("/getMostFollowedUsers", handlers.GetTopMostFollowedUsers)
+	http.HandleFunc("/getAllUserPosts", handlers.GetPostPerUserHandler)
 
 	// Protected routes
 	http.HandleFunc("/makepost", handlers.IsAuthorized(handlers.MakePostHandler))
@@ -41,21 +43,18 @@ func setupRoutes() {
 	http.HandleFunc("/comment", handlers.IsAuthorized(handlers.CommentHandler))
 	http.HandleFunc("/deletePost", handlers.IsAuthorized(handlers.DeletePostHandler))
 	http.HandleFunc("/updateFCMToken", handlers.IsAuthorized(handlers.UpdateFCMTokenHandler))
-
+	http.HandleFunc("/ChangeUsername", handlers.IsAuthorized(handlers.ChangeUsernameHandler))
 	
 	
 	
 }
 
-// setupFileServer configures static file serving for uploads
 func setupFileServer() {
 	fs := http.FileServer(http.Dir(config.UploadDir))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 }
 
-// Start initializes and starts the HTTP server
 func Start(database *sqlx.DB) error {
-	// Initialize handlers with dependencies
 	handlers.InitHandlers(database, lib.JWTSecret, config.BaseURL)
 
 	setupRoutes()

@@ -109,6 +109,15 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/changePP" \
     -H "Authorization: $TOKEN")
 check "POST /changePP sans image → 400" "$STATUS" 400
 
+echo "[PROFIL] Changement de nom d'utilisateur..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/ChangeUsername" \
+    -H "Authorization: $TOKEN" -F "username=NewUsername")
+check "POST /ChangeUsername → 200" "$STATUS" 200
+
+echo "[PROFIL] Trouver les 10 plus suivis..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/getMostFollowedUsers" -F limit=10)
+check "GET /getMostFollowedUsers → 200" "$STATUS" 200
+
 # ────────────────────────────────────────────────────
 # GROUPES
 # ────────────────────────────────────────────────────
@@ -232,6 +241,10 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
     "$BASE_URL/getpost?id=$POST_ID")
 check "GET /getpost sans token sur post privé → 403" "$STATUS" 403
 
+echo "[POSTS] Trouver tout les posts d'un utilisateur..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/getAllUserPosts" -H "Authorization: $TOKEN" -F "userID=$MY_ID")
+check "GET /getAllUserPosts → 200" "$STATUS" 200
+
 # ────────────────────────────────────────────────────
 # LIKES
 # ────────────────────────────────────────────────────
@@ -309,6 +322,7 @@ echo "[FOLLOWERS] Unfollow..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/unfollow" \
     -H "Authorization: $TOKEN" -F "user_id=$MY_ID")
 check "POST /unfollow → 200" "$STATUS" 200
+
 
 # ────────────────────────────────────────────────────
 # LOCALISATION

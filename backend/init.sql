@@ -1,7 +1,7 @@
 -- Utilisateurs
 CREATE TABLE Utilisateurs (
     usr_id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
+    username VARCHAR(50) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password TEXT NOT NULL,
     url_pp TEXT,

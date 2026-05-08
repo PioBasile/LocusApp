@@ -471,3 +471,56 @@ func GetNearbyPostsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(postIDs) // Renvoie direct [1, 2, 3, 4, 5]
 }
+
+
+func GetPostPerUserHandler(w http.ResponseWriter, r *http.Request) {
+
+	askerID := -1
+	tokenString := r.Header.Get("Authorization")
+	if tokenString != "" {
+    	askerID = getUserIDFromToken(tokenString)
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		return 
+	}
+
+	var posts []lib.PostResponse
+	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation 
+			  FROM Publications WHERE id_publicateur = $1`
+	err := db.Select(&posts, query, userID)
+	if err != nil {
+		return 
+	}
+
+	// check for posts that are in groups the user is part of
+
+	for i := range posts {
+		var groupIDs []int
+		queryGroups := `SELECT id_grp FROM PublicationGroupe WHERE id_pub = $1`
+		err = db.Select(&groupIDs, queryGroups, posts[i].ID)
+		if err != nil {
+			fmt.Printf("Erreur récupération groupes pour post %d: %v\n", posts[i].ID, err)
+			continue
+		}
+
+		posts[i].Groupes = groupIDs
+
+		if len(groupIDs) > 0 {
+			authorized := false
+			for _, gID := range groupIDs {
+				if IsMemberOfGroup(askerID, gID) {
+					authorized = true
+					break
+				}
+			}
+			if !authorized {
+				posts[i] = lib.PostResponse{} 
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}

@@ -45,6 +45,7 @@ type PublicUserInfo struct {
 	ID             int    `json:"id" db:"id"`
 	Username       string `json:"username" db:"username"`
 	ProfilePicture string `json:"ppurl" db:"ppurl"`
+	Posts 		   []PostResponse `json:"posts,omitempty"`
 }
 
 // Group represents a user group
@@ -60,4 +61,10 @@ type Post_for_algo struct {
     ID      int     `db:"id_pub"`   
     GPS     string  `db:"gps"`     
 	DistanceFromUser float64 
+}
+
+type FollowerInfo struct {
+	ID       int    `json:"id" db:"id"`
+	Username string `json:"username" db:"username"`
+	PPURL    string `json:"ppurl" db:"ppurl"`
 }
