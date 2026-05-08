@@ -45,6 +45,8 @@ func initDirectories() {
         "./uploads/posts",
         "./uploads/groupes_pic",
         "./uploads/profiles_pic",
+		"./uploads/comments_audio",
+		"./uploads/posts_audio",
     }
 
     for _, dir := range dirs {

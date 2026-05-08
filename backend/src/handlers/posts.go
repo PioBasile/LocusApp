@@ -17,16 +17,16 @@ import (
 func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(int)
 
-	// 2. Parse le formulaire multipart (limite de 10 MB pour l'image)
-	err := r.ParseMultipartForm(10 << 20) 
+	// 1. Parse le formulaire multipart (limite augmentée à 50 MB pour image + audio)
+	err := r.ParseMultipartForm(50 << 20)
 	if err != nil {
-		http.Error(w, "Fichier trop volumineux", http.StatusBadRequest)
+		http.Error(w, "Fichiers trop volumineux", http.StatusBadRequest)
 		return
 	}
 
 	description := r.FormValue("description")
 	locationID := r.FormValue("id_loc")
-	groupesRaw := r.MultipartForm.Value["groupe"] 
+	groupesRaw := r.MultipartForm.Value["groupe"]
 
 	if len(groupesRaw) == 0 {
 		groupesRaw = []string{"0"}
@@ -49,6 +49,7 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 		groupIDs = append(groupIDs, groupID)
 	}
 
+	// --- GESTION DE L'IMAGE (OBLIGATOIRE) ---
 	file, handler, err := r.FormFile("image")
 	if err != nil {
 		http.Error(w, "Image manquante", http.StatusBadRequest)
@@ -60,13 +61,48 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 	dstPath := "./uploads/posts/" + imageName
 	dst, err := os.Create(dstPath)
 	if err != nil {
-		http.Error(w, "Erreur lors de la création du fichier", http.StatusInternalServerError)
+		http.Error(w, "Erreur lors de la création du fichier image", http.StatusInternalServerError)
 		return
 	}
 	defer dst.Close()
-
+	
 	fullImageURL := fmt.Sprintf("%s/uploads/posts/%s", BaseURL, imageName)
 
+	// --- GESTION DE L'AUDIO (OPTIONNEL) ---
+	var audioURL sql.NullString // Permet d'insérer NULL proprement en DB si aucun audio n'est fourni
+
+	audioFile, audioHandler, errAudio := r.FormFile("audio")
+	if errAudio == nil {
+		// Si un fichier audio est présent
+		defer audioFile.Close()
+
+		audioName := lib.GenerateNewUUID() + filepath.Ext(audioHandler.Filename)
+		audioDstPath := "./uploads/posts_audio/" + audioName
+		audioDst, err := os.Create(audioDstPath)
+		if err != nil {
+			http.Error(w, "Erreur lors de la création du fichier audio", http.StatusInternalServerError)
+			return
+		}
+		defer audioDst.Close()
+
+		// On copie directement le fichier audio
+		if _, err := io.Copy(audioDst, audioFile); err != nil {
+			http.Error(w, "Erreur lors de l'écriture de l'audio", http.StatusInternalServerError)
+			return
+		}
+
+		// On valide la variable sql.NullString
+		audioURL = sql.NullString{
+			String: fmt.Sprintf("%s/uploads/posts_audio/%s", BaseURL, audioName),
+			Valid:  true,
+		}
+	} else if errAudio != http.ErrMissingFile {
+		// S'il y a une erreur autre que "fichier manquant" (ex: fichier corrompu)
+		http.Error(w, "Erreur lors de la lecture du fichier audio", http.StatusBadRequest)
+		return
+	}
+
+	// --- SAUVEGARDE EN BASE DE DONNÉES ---
 	tx, err := db.Beginx()
 	if err != nil {
 		http.Error(w, "Erreur serveur", http.StatusInternalServerError)
@@ -74,10 +110,12 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lastID int
-	queryInsertPost := `INSERT INTO Publications (id_publicateur, description, url_image, id_localisation) 
-	                    VALUES ($1, $2, $3, $4) RETURNING id_pub`
-	
-	err = tx.Get(&lastID, queryInsertPost, userID, description, fullImageURL, locationID)
+	// Ajout de url_audio dans la requête SQL
+	queryInsertPost := `INSERT INTO Publications (id_publicateur, description, url_image, url_audio, id_localisation) 
+	                    VALUES ($1, $2, $3, $4, $5) RETURNING id_pub`
+
+	// On passe audioURL comme 4ème paramètre
+	err = tx.Get(&lastID, queryInsertPost, userID, description, fullImageURL, audioURL, locationID)
 	if err != nil {
 		tx.Rollback()
 		http.Error(w, "Erreur SQL lors de l'insertion du post", http.StatusInternalServerError)
@@ -99,13 +137,14 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notification push
 	go NotifyGroupMembersPush(groupIDs, userID, description)
-	
+
+	// On copie l'image uniquement si la transaction SQL a réussi
 	if _, err := io.Copy(dst, file); err != nil {
 		http.Error(w, "Erreur lors de l'écriture de l'image", http.StatusInternalServerError)
 		return
 	}
-
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Post créé avec succès ! Groupes associés : %v", groupIDs)
@@ -129,9 +168,10 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
     Groupes     []int   `db:"groupe" json:"groupe"`
     Date        time.Time  `db:"date" json:"date"`
     LocID       *int    `db:"id_localisation" json:"id_loc"`
+	AudioURL   	*string `db:"url_audio" json:"audio_url,omitempty"`
 }
 
-	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation 
+	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation , url_audio
               FROM Publications WHERE id_pub = $1`
 
 	err := db.Get(&post, query, postID)
@@ -216,7 +256,7 @@ func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
 
     var posts []lib.PostResponse
     queryPosts, args, err := sqlx.In(`
-        SELECT id_pub, id_publicateur, description, url_image, date, id_localisation 
+        SELECT id_pub, id_publicateur, description, url_image, url_audio, date, id_localisation 
         FROM Publications 
         WHERE id_pub IN (?) 
         ORDER BY date DESC`, postIDs)
@@ -406,15 +446,59 @@ func GetAllUserLikesHandler(w http.ResponseWriter, r *http.Request) {
 func CommentHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(int)
 	post_id := r.URL.Query().Get("id")
-	comment := r.FormValue("comment")
 
 	if post_id == "" {
 		http.Error(w, "ID du post manquant", http.StatusBadRequest)
 		return
 	}
 
-	query := `INSERT INTO Commentaires (id_user, id_pub, commentaire) VALUES ($1, $2, $3)`
-	_, err := db.Exec(query, userID, post_id, comment)
+	// 1. Parse le formulaire multipart (limite de 10 MB, largement suffisant pour un vocal)
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		http.Error(w, "Fichiers trop volumineux", http.StatusBadRequest)
+		return
+	}
+
+	comment := r.FormValue("comment")
+
+	// --- GESTION DE L'AUDIO (OPTIONNEL) ---
+	var audioURL sql.NullString
+
+	audioFile, audioHandler, errAudio := r.FormFile("audio")
+	if errAudio == nil {
+		// Si un fichier audio est présent
+		defer audioFile.Close()
+
+		audioName := lib.GenerateNewUUID() + filepath.Ext(audioHandler.Filename)
+		audioDstPath := "./uploads/comments_audio/" + audioName
+		audioDst, err := os.Create(audioDstPath)
+		if err != nil {
+			http.Error(w, "Erreur lors de la création du fichier audio", http.StatusInternalServerError)
+			return
+		}
+		defer audioDst.Close()
+
+		// On copie directement le fichier audio
+		if _, err := io.Copy(audioDst, audioFile); err != nil {
+			http.Error(w, "Erreur lors de l'écriture de l'audio", http.StatusInternalServerError)
+			return
+		}
+
+		// On valide la variable sql.NullString
+		audioURL = sql.NullString{
+			String: fmt.Sprintf("%s/uploads/comments_audio/%s", BaseURL, audioName),
+			Valid:  true,
+		}
+	} else if errAudio != http.ErrMissingFile {
+		// S'il y a une erreur autre que "fichier manquant"
+		http.Error(w, "Erreur lors de la lecture du fichier audio", http.StatusBadRequest)
+		return
+	}
+
+	// --- SAUVEGARDE EN BASE DE DONNÉES ---
+	// Ajout de url_audio dans la requête SQL
+	query := `INSERT INTO Commentaires (id_user, id_pub, commentaire, url_audio) VALUES ($1, $2, $3, $4)`
+	_, err = db.Exec(query, userID, post_id, comment, audioURL)
 	if err != nil {
 		http.Error(w, "Erreur lors de l'ajout du commentaire", http.StatusInternalServerError)
 		return
@@ -432,14 +516,16 @@ func GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Comment struct {
-		ID          int    `db:"id_com" json:"id"`
-        UserID      int    `db:"id_user" json:"user_id"` 
-        PubID       int    `db:"id_pub" json:"post_id"` 
-        Commentaire string `db:"commentaire" json:"commentaire"`
+		ID          int     `db:"id_com" json:"id"`
+		UserID      int     `db:"id_user" json:"user_id"` 
+		PubID       int     `db:"id_pub" json:"post_id"` 
+		Commentaire string  `db:"commentaire" json:"commentaire"`
+		AudioURL    *string `db:"url_audio" json:"audio_url,omitempty"` // <--- Nouveau champ
 	}
 
 	var comments []Comment
-	query := `SELECT id_com, id_pub, id_user, commentaire FROM Commentaires WHERE id_pub = $1`
+	// Ajout de url_audio dans le SELECT
+	query := `SELECT id_com, id_pub, id_user, commentaire, url_audio FROM Commentaires WHERE id_pub = $1`
 	err := db.Select(&comments, query, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de la récupération des commentaires", http.StatusInternalServerError)
@@ -449,7 +535,6 @@ func GetCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(comments)
 }
-
 
 
 
@@ -487,8 +572,8 @@ func GetPostPerUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var posts []lib.PostResponse
-	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation 
-			  FROM Publications WHERE id_publicateur = $1`
+	query := `SELECT id_pub, id_publicateur, description, url_image, url_audio, date, id_localisation 
+              FROM Publications WHERE id_publicateur = $1`
 	err := db.Select(&posts, query, userID)
 	if err != nil {
 		return 

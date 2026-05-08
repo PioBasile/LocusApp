@@ -26,13 +26,13 @@ type LoginResponse struct {
 type PostResponse struct {
     ID          int            `db:"id_pub" json:"id"`
     UserID      int            `db:"id_publicateur" json:"user_id"`
-    Groupes      []int            `db:"groupe" json:"groupe"`
+    Groupes     []int          `db:"groupe" json:"groupe"`
     Description string         `db:"description" json:"description"`
     ImageURL    string         `db:"url_image" json:"image_url"`
+    AudioURL    *string        `db:"url_audio" json:"audio_url,omitempty"` // <--- À AJOUTER
     Date        string         `db:"date" json:"date"`
     LocID       *int           `db:"id_localisation" json:"id_loc"`
 }
-
 // Location represents a geographic location
 type Location struct {
 	ID  int         `json:"id" db:"id_loc"`

@@ -3,6 +3,7 @@
 # Configuration
 BASE_URL="http://localhost:8080"
 IMAGE="/home/dorian/Téléchargements/ev.png"
+AUDIO="/home/dorian/Téléchargements/boom.mp3"
 EMAIL="test_complet@example.com"
 PASSWORD="password123"
 USERNAME="DorianTester"
@@ -23,8 +24,7 @@ check() {
     fi
 }
 
-sudo rm -rf ./uploads/posts/* ./uploads/groupes_pic/* ./uploads/profiles_pic/* 
-
+sudo rm -rf ./uploads/posts/* ./uploads/groupes_pic/* ./uploads/profiles_pic/* ./uploads/comments_audio/* ./uploads/posts_audio/*
 echo "=== DÉMARRAGE DES TESTS DE L'API ==="
 
 # ────────────────────────────────────────────────────
@@ -245,6 +245,13 @@ echo "[POSTS] Trouver tout les posts d'un utilisateur..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/getAllUserPosts" -H "Authorization: $TOKEN" -F "userID=$MY_ID")
 check "GET /getAllUserPosts → 200" "$STATUS" 200
 
+echo "[POSTS] Poser avec un audio en plus de l'image..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/makepost" \
+    -H "Authorization: $TOKEN" \
+    -F "description=Post avec audio" -F "id_loc=1" \
+    -F "groupe=0" -F "image=@$IMAGE" -F "audio=@$AUDIO")
+check "POST /makepost avec audio → 201" "$STATUS" 201
+
 # ────────────────────────────────────────────────────
 # LIKES
 # ────────────────────────────────────────────────────
@@ -299,6 +306,12 @@ check "GET /getComments → 200" "$STATUS" 200
 echo "[COMMENTAIRES] getComments sans id..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/getComments")
 check "GET /getComments sans id → 400" "$STATUS" 400
+
+echo "[COMMENTAIRES] Commenter avec un audio..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+    "$BASE_URL/comment?id=$POST_ID" -H "Authorization: $TOKEN" \
+    -F "comment=Test avec audio" -F "audio=@$AUDIO")
+check "POST /comment avec audio → 200" "$STATUS" 200
 
 # ────────────────────────────────────────────────────
 # FOLLOWERS

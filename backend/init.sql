@@ -40,6 +40,7 @@ CREATE TABLE Publications (
     description TEXT,
     id_localisation INT REFERENCES Localisation(id_loc),
     url_image TEXT NOT NULL,
+    url_audio TEXT,
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -54,6 +55,7 @@ CREATE TABLE Commentaires (
     id_com SERIAL PRIMARY KEY,
     id_pub INT REFERENCES Publications(id_pub) ON DELETE CASCADE,
     id_user INT REFERENCES Utilisateurs(usr_id) ON DELETE CASCADE,
+    url_audio TEXT,
     commentaire TEXT NOT NULL
 );
 
