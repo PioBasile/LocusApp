@@ -1,5 +1,7 @@
 package lib
 
+import "github.com/lib/pq"
+
 // User represents a user in the system
 type User struct {
 	ID             int    `json:"id" db:"id"`
@@ -24,14 +26,15 @@ type LoginResponse struct {
 
 // PostResponse represents a post in responses
 type PostResponse struct {
-    ID          int            `db:"id_pub" json:"id"`
-    UserID      int            `db:"id_publicateur" json:"user_id"`
-    Groupes     []int          `db:"groupe" json:"groupe"`
-    Description string         `db:"description" json:"description"`
-    ImageURL    string         `db:"url_image" json:"image_url"`
-    AudioURL    *string        `db:"url_audio" json:"audio_url,omitempty"` // <--- À AJOUTER
-    Date        string         `db:"date" json:"date"`
-    LocID       *int           `db:"id_localisation" json:"id_loc"`
+	ID          int            `db:"id_pub" json:"id"`
+	UserID      int            `db:"id_publicateur" json:"user_id"`
+	Groupes     []int          `db:"groupe" json:"groupe"`
+	Description string         `db:"description" json:"description"`
+	ImageURL    string         `db:"url_image" json:"image_url"`
+	AudioURL    *string        `db:"url_audio" json:"audio_url,omitempty"`
+	Tags        pq.StringArray `db:"tags" json:"tags"`
+	Date        string         `db:"date" json:"date"`
+	LocID       *int           `db:"id_localisation" json:"id_loc"`
 }
 // Location represents a geographic location
 type Location struct {

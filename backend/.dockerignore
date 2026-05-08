@@ -2,7 +2,6 @@
 .gitignore
 README.md
 *.md
-.env
 .env.local
 .vscode
 .idea

@@ -4,4 +4,5 @@ uploads/groupes_pic/*
 uploads/comments_audio/*
 uploads/posts_audio/*
 locusKey.json
-./src/main
+/src/main
+.env

@@ -7,6 +7,7 @@ RUN go mod download
 
 COPY ./src .
 COPY locusKey.json .
+COPY .env .
 
 RUN go build -o main .
 

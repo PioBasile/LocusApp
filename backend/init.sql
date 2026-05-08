@@ -41,6 +41,7 @@ CREATE TABLE Publications (
     id_localisation INT REFERENCES Localisation(id_loc),
     url_image TEXT NOT NULL,
     url_audio TEXT,
+    tags TEXT[],
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

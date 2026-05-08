@@ -12,6 +12,7 @@ import (
 	"backend/lib"
 	"time"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 func MakePostHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,14 +138,17 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notification push
-	go NotifyGroupMembersPush(groupIDs, userID, description)
 
 	// On copie l'image uniquement si la transaction SQL a réussi
 	if _, err := io.Copy(dst, file); err != nil {
 		http.Error(w, "Erreur lors de l'écriture de l'image", http.StatusInternalServerError)
 		return
 	}
+
+	// Notification push
+	go NotifyGroupMembersPush(groupIDs, userID, description)
+	// IA
+	go GenerateAndSaveTags(lastID, description, dstPath)
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Post créé avec succès ! Groupes associés : %v", groupIDs)
@@ -161,18 +165,19 @@ func GetPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var post struct {
-    ID          int     `db:"id_pub" json:"id"`
-    UserID      int     `db:"id_publicateur" json:"user_id"`
-    Description string  `db:"description" json:"description"`
-    ImageURL    string  `db:"url_image" json:"image_url"`
-    Groupes     []int   `db:"groupe" json:"groupe"`
-    Date        time.Time  `db:"date" json:"date"`
-    LocID       *int    `db:"id_localisation" json:"id_loc"`
-	AudioURL   	*string `db:"url_audio" json:"audio_url,omitempty"`
-}
+		ID          int            `db:"id_pub" json:"id"`
+		UserID      int            `db:"id_publicateur" json:"user_id"`
+		Description string         `db:"description" json:"description"`
+		ImageURL    string         `db:"url_image" json:"image_url"`
+		Groupes     []int          `db:"groupe" json:"groupe"`
+		Date        time.Time      `db:"date" json:"date"`
+		LocID       *int           `db:"id_localisation" json:"id_loc"`
+		AudioURL    *string        `db:"url_audio" json:"audio_url,omitempty"`
+		Tags        pq.StringArray `db:"tags" json:"tags"` // <--- AJOUT ICI
+	}
 
-	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation , url_audio
-              FROM Publications WHERE id_pub = $1`
+	query := `SELECT id_pub, id_publicateur, description, url_image, date, id_localisation, url_audio, tags
+			  FROM Publications WHERE id_pub = $1`
 
 	err := db.Get(&post, query, postID)
 	if err != nil {
@@ -256,10 +261,10 @@ func GetPostPerGroupHandler(w http.ResponseWriter, r *http.Request) {
 
     var posts []lib.PostResponse
     queryPosts, args, err := sqlx.In(`
-        SELECT id_pub, id_publicateur, description, url_image, url_audio, date, id_localisation 
-        FROM Publications 
-        WHERE id_pub IN (?) 
-        ORDER BY date DESC`, postIDs)
+		SELECT id_pub, id_publicateur, description, url_image, url_audio, tags, date, id_localisation 
+		FROM Publications 
+		WHERE id_pub IN (?) 
+		ORDER BY date DESC`, postIDs)
     
     if err != nil {
         http.Error(w, "Erreur de préparation SQL", http.StatusInternalServerError)
@@ -572,8 +577,8 @@ func GetPostPerUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var posts []lib.PostResponse
-	query := `SELECT id_pub, id_publicateur, description, url_image, url_audio, date, id_localisation 
-              FROM Publications WHERE id_publicateur = $1`
+	query := `SELECT id_pub, id_publicateur, description, url_image, url_audio, tags, date, id_localisation 
+			  FROM Publications WHERE id_publicateur = $1` 
 	err := db.Select(&posts, query, userID)
 	if err != nil {
 		return 
