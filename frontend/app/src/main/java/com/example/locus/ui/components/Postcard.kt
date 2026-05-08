@@ -1,7 +1,11 @@
 package com.example.locus.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -10,7 +14,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -25,7 +28,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -45,7 +47,8 @@ fun Postcard(
     token: String = "",
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
-    onDeleted: () -> Unit = {}
+    onDeleted: () -> Unit = {},
+    onUserClick: (Int) -> Unit = {}
 ) {
     key(post.id) {
         PostCardContent(
@@ -55,11 +58,13 @@ fun Postcard(
             token = token,
             onCommentClick = onCommentClick,
             onLikeClick = onLikeClick,
-            onDeleted = onDeleted
+            onDeleted = onDeleted,
+            onUserClick = onUserClick
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PostCardContent(
     post: Post,
@@ -68,12 +73,14 @@ private fun PostCardContent(
     token: String = "",
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
-    onDeleted: () -> Unit = {}
+    onDeleted: () -> Unit = {},
+    onUserClick: (Int) -> Unit = {}
 ) {
     var authorName by remember { mutableStateOf(post.username ?: "User ${post.userId}") }
     var authorAvatarUrl by remember { mutableStateOf<String?>(null) }
     var isLoadingProfile by remember { mutableStateOf(true) }
     val locationName = post.locationName
+    val tags = post.tags?.filter { it.isNotBlank() }
 
     val likedPostIds by viewModel.likedPostIds.collectAsState()
     val likeCounts by viewModel.likeCounts.collectAsState()
@@ -83,16 +90,10 @@ private fun PostCardContent(
     val likesCount = likeCounts[post.id] ?: 0
     val commentsCount = commentCounts[post.id] ?: 0
 
-    // Follow state
-    var isFollowing by remember { mutableStateOf(false) }
-
-    // Dropdown menu
+    val followingUserIds by viewModel.followingUserIds.collectAsState()
+    val isFollowing = post.userId in followingUserIds
     var showMenu by remember { mutableStateOf(false) }
-
-    // Report dialog
     var showReportDialog by remember { mutableStateOf(false) }
-
-    // Delete confirm dialog
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val isMyPost = currentUserId != null && post.userId == currentUserId
@@ -111,7 +112,6 @@ private fun PostCardContent(
         }
     }
 
-    // Report dialog
     if (showReportDialog) {
         ReportDialog(
             onDismiss = { showReportDialog = false },
@@ -122,21 +122,12 @@ private fun PostCardContent(
         )
     }
 
-    // Delete confirm dialog
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             containerColor = White,
-            title = {
-                Text("Delete post?", color = NavyDark, fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Text(
-                    "This action cannot be undone.",
-                    color = MediumGray,
-                    fontSize = 14.sp
-                )
-            },
+            title = { Text("Delete post?", color = NavyDark, fontWeight = FontWeight.Bold) },
+            text = { Text("This action cannot be undone.", color = MediumGray, fontSize = 14.sp) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -144,26 +135,18 @@ private fun PostCardContent(
                         showDeleteDialog = false
                         onDeleted()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFE53935)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
                     shape = RoundedCornerShape(50.dp)
-                ) {
-                    Text("Delete", color = White)
-                }
+                ) { Text("Delete", color = White) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel", color = MediumGray)
-                }
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", color = MediumGray) }
             }
         )
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = NavyDark),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -177,71 +160,54 @@ private fun PostCardContent(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar
+                // Tappable avatar
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(White),
+                        .background(White)
+                        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { if (!isMyPost) onUserClick(post.userId) },
                     contentAlignment = Alignment.Center
                 ) {
                     if (isLoadingProfile) {
-                        // Optionnel : un petit indicateur de chargement au lieu de l'initiale
-                        CircularProgressIndicator(
-                            color = GoldPrimary,
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
+                        CircularProgressIndicator(color = GoldPrimary, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else if (!authorAvatarUrl.isNullOrBlank() && authorAvatarUrl != "img.jpg") {
-                        // L'utilisateur a une vraie photo
                         AsyncImage(
                             model = authorAvatarUrl,
                             contentDescription = "Avatar",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
-                    }
-                    else {
-                        // L'utilisateur n'a pas de photo : Logo Locus par défaut
+                    } else {
                         androidx.compose.foundation.Image(
                             painter = painterResource(id = R.drawable.ic_logo),
                             contentDescription = "Default avatar",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp)
+                            modifier = Modifier.fillMaxSize().padding(8.dp)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = authorName,
-                        color = White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        text = formatTimeAgo(post.date),
-                        color = White.copy(alpha = 0.6f),
-                        fontSize = 12.sp
-                    )
+                // Tappable username
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { if (!isMyPost) onUserClick(post.userId) }
+                ) {
+                    Text(text = authorName, color = White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(text = formatTimeAgo(post.date), color = White.copy(alpha = 0.6f), fontSize = 12.sp)
                 }
 
-                // -- Follow button (hidden for own posts) ----------
                 if (!isMyPost) {
                     Button(
                         onClick = {
-                            isFollowing = !isFollowing
-                            viewModel.followUser(token, post.userId)
+                            if (isFollowing) viewModel.unfollowUser(token, post.userId)
+                            else viewModel.followUser(token, post.userId)
                         },
                         shape = RoundedCornerShape(50.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isFollowing)
-                                White.copy(alpha = 0.15f)
-                            else
-                                GoldPrimary,
+                            containerColor = if (isFollowing) White.copy(alpha = 0.15f) else GoldPrimary,
                             contentColor = White
                         ),
                         elevation = ButtonDefaults.buttonElevation(0.dp),
@@ -254,73 +220,33 @@ private fun PostCardContent(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-
                     Spacer(modifier = Modifier.width(6.dp))
                 }
 
-                // -- 3-dot menu ------------------------------------
                 Box {
-                    IconButton(
-                        onClick = { showMenu = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = "More",
-                            tint = GoldPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More", tint = GoldPrimary, modifier = Modifier.size(20.dp))
                     }
-
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(White)
-                    ) {
-                        // Report — always visible
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }, modifier = Modifier.background(White)) {
                         DropdownMenuItem(
                             text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Flag,
-                                        contentDescription = null,
-                                        tint = Color(0xFFE53935),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Filled.Flag, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(16.dp))
                                     Text("Report", color = Color(0xFFE53935), fontSize = 14.sp)
                                 }
                             },
-                            onClick = {
-                                showMenu = false
-                                showReportDialog = true
-                            }
+                            onClick = { showMenu = false; showReportDialog = true }
                         )
-
-                        // Delete — only for own posts
                         if (isMyPost) {
                             HorizontalDivider(color = LightGray, thickness = 0.5.dp)
                             DropdownMenuItem(
                                 text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Delete,
-                                            contentDescription = null,
-                                            tint = NavyDark,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(Icons.Filled.Delete, contentDescription = null, tint = NavyDark, modifier = Modifier.size(16.dp))
                                         Text("Delete post", color = NavyDark, fontSize = 14.sp)
                                     }
                                 },
-                                onClick = {
-                                    showMenu = false
-                                    showDeleteDialog = true
-                                }
+                                onClick = { showMenu = false; showDeleteDialog = true }
                             )
                         }
                     }
@@ -328,27 +254,29 @@ private fun PostCardContent(
             }
 
             // -- Image ---------------------------------------------
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 AsyncImage(
                     model = post.imageUrl,
                     contentDescription = "Post image",
                     contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight().clip(RoundedCornerShape(12.dp))
+                )
+            }
+
+            // -- Audio player (if post has voice note) -------------
+            if (!post.audioUrl.isNullOrBlank()) {
+                AudioPlayerBar(
+                    audioUrl = post.audioUrl,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .wrapContentHeight()
-                        .clip(RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp)
+                        .padding(top = 10.dp)
                 )
             }
 
             // -- Actions row ---------------------------------------
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -356,16 +284,11 @@ private fun PostCardContent(
                     PostActionItem(
                         icon = {
                             IconButton(
-                                onClick = {
-                                    if (token.isNotEmpty()) {
-                                        viewModel.toggleLike(token, post.id, !isLiked)
-                                    }
-                                },
+                                onClick = { if (token.isNotEmpty()) viewModel.toggleLike(token, post.id, !isLiked) },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (isLiked) Icons.Filled.Favorite
-                                    else Icons.Filled.FavoriteBorder,
+                                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                     contentDescription = "Like",
                                     tint = if (isLiked) Color(0xFFE53935) else GoldPrimary,
                                     modifier = Modifier.size(22.dp)
@@ -374,51 +297,26 @@ private fun PostCardContent(
                         },
                         count = likesCount
                     )
-
                     PostActionItem(
                         icon = {
-                            IconButton(
-                                onClick = onCommentClick,
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    Icons.Filled.ChatBubbleOutline,
-                                    contentDescription = "Comment",
-                                    tint = GoldPrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
+                            IconButton(onClick = onCommentClick, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Comment", tint = GoldPrimary, modifier = Modifier.size(22.dp))
                             }
                         },
                         count = commentsCount
                     )
                 }
 
-                // Location chip — only shown when the post has a location
                 if (locationName != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .background(
-                                color = White.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(16.dp)
-                            )
+                            .background(color = White.copy(alpha = 0.1f), shape = RoundedCornerShape(16.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.LocationOn,
-                            contentDescription = null,
-                            tint = GoldPrimary,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(imageVector = Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = locationName,
-                            color = White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(text = locationName, color = White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -426,31 +324,45 @@ private fun PostCardContent(
             // -- Caption -------------------------------------------
             Text(
                 text = buildAnnotatedString {
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = White)) {
-                        append("$authorName : ")
-                    }
-                    withStyle(style = SpanStyle(color = White.copy(alpha = 0.9f))) {
-                        append(post.description)
-                    }
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = White)) { append("$authorName : ") }
+                    withStyle(style = SpanStyle(color = White.copy(alpha = 0.9f))) { append(post.description) }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .padding(bottom = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                 fontSize = 13.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // -- AI Tags -------------------------------------------
+            if (!tags.isNullOrEmpty()) {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(top = 8.dp, bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    tags.take(5).forEach { tag ->
+                        Box(
+                            modifier = Modifier
+                                .background(White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(text = "#$tag", color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(14.dp))
+            }
         }
     }
 }
 
 // -- Report dialog -------------------------------------------------------------
 @Composable
-private fun ReportDialog(
-    onDismiss: () -> Unit,
-    onReport: (reason: String, comment: String) -> Unit
-) {
+private fun ReportDialog(onDismiss: () -> Unit, onReport: (reason: String, comment: String) -> Unit) {
     val reasons = listOf("Spam", "Inappropriate content", "Harassment", "Misinformation", "Other")
     var selectedReason by remember { mutableStateOf(reasons[0]) }
     var comment by remember { mutableStateOf("") }
@@ -459,18 +371,10 @@ private fun ReportDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = White,
-        title = {
-            Text("Report post", color = NavyDark, fontWeight = FontWeight.Bold)
-        },
+        title = { Text("Report post", color = NavyDark, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Why are you reporting this post?",
-                    color = MediumGray,
-                    fontSize = 13.sp
-                )
-
-                // Reason dropdown
+                Text("Why are you reporting this post?", color = MediumGray, fontSize = 13.sp)
                 Box {
                     OutlinedTextField(
                         value = selectedReason,
@@ -480,11 +384,7 @@ private fun ReportDialog(
                         shape = RoundedCornerShape(10.dp),
                         trailingIcon = {
                             IconButton(onClick = { expanded = true }) {
-                                Icon(
-                                    Icons.Filled.MoreVert,
-                                    contentDescription = null,
-                                    tint = NavyDark
-                                )
+                                Icon(Icons.Filled.MoreVert, contentDescription = null, tint = NavyDark)
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
@@ -495,45 +395,26 @@ private fun ReportDialog(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    // Transparent overlay
                     Button(
                         onClick = { expanded = true },
                         modifier = Modifier.matchParentSize(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent,
-                            contentColor = Color.Transparent
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.Transparent),
                         elevation = ButtonDefaults.buttonElevation(0.dp),
                         contentPadding = PaddingValues(0.dp)
                     ) {}
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.background(White)
-                    ) {
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(White)) {
                         reasons.forEach { reason ->
                             DropdownMenuItem(
                                 text = { Text(reason, color = NavyDark, fontSize = 14.sp) },
-                                onClick = {
-                                    selectedReason = reason
-                                    expanded = false
-                                }
+                                onClick = { selectedReason = reason; expanded = false }
                             )
                         }
                     }
                 }
-
-                // Optional comment
                 OutlinedTextField(
                     value = comment,
                     onValueChange = { comment = it },
-                    placeholder = {
-                        Text(
-                            "Additional details (optional)",
-                            color = InputHint,
-                            fontSize = 13.sp
-                        )
-                    },
+                    placeholder = { Text("Additional details (optional)", color = InputHint, fontSize = 13.sp) },
                     maxLines = 3,
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -550,19 +431,11 @@ private fun ReportDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onReport(selectedReason, comment) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                shape = RoundedCornerShape(50.dp)
-            ) {
+            Button(onClick = { onReport(selectedReason, comment) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)), shape = RoundedCornerShape(50.dp)) {
                 Text("Report", color = White)
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = MediumGray)
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MediumGray) } }
     )
 }
 
@@ -571,11 +444,6 @@ private fun PostActionItem(icon: @Composable () -> Unit, count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         icon()
         Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = count.toString(),
-            color = White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium
-        )
+        Text(text = count.toString(), color = White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

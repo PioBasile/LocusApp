@@ -7,22 +7,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.model.Post
 import com.example.locus.data.remote.CommentResponse
+import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.GroupDetailResponse
 import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.data.remote.PostResponse
 import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.repository.GroupRepository
 import com.example.locus.data.repository.PostRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class HomeUiState(
     val posts: List<Post> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val selectedGroupId: Int = 0  // default group
+    val selectedGroupId: Int = 0
 )
 
 class HomeViewModel(
@@ -36,13 +40,29 @@ class HomeViewModel(
         private set
     var groupDetail by mutableStateOf<GroupDetailResponse?>(null)
         private set
+    var selectedGroup by mutableStateOf<MyGroupResponse?>(null)
+        private set
+
+    fun selectGroup(group: MyGroupResponse?) {
+        selectedGroup = group
+    }
 
     private val _posts = MutableStateFlow<List<PostResponse>>(emptyList())
     val posts: StateFlow<List<PostResponse>> = _posts.asStateFlow()
 
-
     private val _userGroups = MutableStateFlow<List<MyGroupResponse>>(emptyList())
     val userGroups: StateFlow<List<MyGroupResponse>> = _userGroups.asStateFlow()
+
+    private val _followingUserIds = MutableStateFlow<Set<Int>>(emptySet())
+    val followingUserIds: StateFlow<Set<Int>> = _followingUserIds.asStateFlow()
+
+    fun loadFollowing(token: String) {
+        viewModelScope.launch {
+            try {
+                _followingUserIds.value = postRepository.getMyFollowing(token).map { it.id }.toSet()
+            } catch (e: Exception) { }
+        }
+    }
 
     fun loadPostsForGroup(token: String, groupId: Int) {
         viewModelScope.launch {
@@ -51,42 +71,26 @@ class HomeViewModel(
         }
     }
 
-
     fun loadUserGroups(token: String) {
         viewModelScope.launch {
             try {
-                // 1. Get the list of IDs: [2, 3]
                 val groupIds = grprepository.getMyGroups(token)
-
                 val loadedGroups = mutableListOf<MyGroupResponse>()
-
-                // 2. Loop through each ID and fetch details
                 for (id in groupIds) {
-                    val groupDetail = grprepository.getGroupDetails(id)
-
-                    if (groupDetail != null) {
+                    val detail = grprepository.getGroupDetails(id)
+                    if (detail != null) {
                         loadedGroups.add(
-                            MyGroupResponse(
-                                id = id,
-                                name = groupDetail.name,
-                                isPrivate = false,
-                                description = "",
-                                imageUrl = groupDetail.imageUrl
-                            )
+                            MyGroupResponse(id = id, name = detail.name, isPrivate = false, description = "", imageUrl = detail.imageUrl)
                         )
                     }
                 }
-
-                // 3. Update the state with the full list
                 _userGroups.value = loadedGroups
-
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    // Fonction pour charger les détails d'un groupe spécifique
     fun loadGroup(groupId: Int) {
         viewModelScope.launch {
             isLoading = true
@@ -102,6 +106,9 @@ class HomeViewModel(
     private val _likeCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val likeCounts: StateFlow<Map<Int, Int>> = _likeCounts.asStateFlow()
 
+    private val _likeJobs = mutableMapOf<Int, Job>()
+    private var likesInitialized = false
+
     // -- Comment counts state ------------------------------------------
     private val _commentCounts = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val commentCounts: StateFlow<Map<Int, Int>> = _commentCounts.asStateFlow()
@@ -113,13 +120,13 @@ class HomeViewModel(
     private val _isLoadingComments = MutableStateFlow(false)
     val isLoadingComments: StateFlow<Boolean> = _isLoadingComments.asStateFlow()
 
-    // -- Fonctions -----------------------------------------------------
-
     fun loadUserLikes(token: String) {
+        if (likesInitialized) return
         viewModelScope.launch {
             try {
                 val liked = postRepository.getAllUserLikes(token)
                 _likedPostIds.value = liked.toSet()
+                likesInitialized = true
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Failed to load user likes: ${e.message}")
             }
@@ -135,21 +142,21 @@ class HomeViewModel(
         viewModelScope.launch {
             _isLoadingComments.value = true
             _currentComments.value = emptyList()
-            val fetchedComments = postRepository.getComments(token, postId)
-            _currentComments.value = fetchedComments
-            _commentCounts.value = _commentCounts.value + (postId to fetchedComments.size)
+            val fetched = postRepository.getComments(token, postId)
+            _currentComments.value = fetched
+            _commentCounts.value = _commentCounts.value + (postId to fetched.size)
             _isLoadingComments.value = false
         }
     }
 
-    fun addComment(token: String, postId: Int, text: String) {
-        if (text.isBlank()) return
+    fun addComment(token: String, postId: Int, text: String, audioFile: File? = null) {
+        if (text.isBlank() && audioFile == null) return
         viewModelScope.launch {
             try {
-                postRepository.addComment(token, postId, text)
+                postRepository.addComment(token, postId, text, audioFile)
                 loadCommentsForPost(token, postId)
             } catch (e: Exception) {
-                println("Erreur lors de l'ajout du commentaire : ${e.message}")
+                android.util.Log.e("HomeViewModel", "Comment failed: ${e.message}")
             }
         }
     }
@@ -164,7 +171,10 @@ class HomeViewModel(
     }
 
     fun toggleLike(token: String, postId: Int, isNowLiked: Boolean) {
-        // Optimistic update
+        // Cancel any pending API call for this post — rapid clicks only fire the last state
+        _likeJobs[postId]?.cancel()
+
+        // Optimistic update immediately
         if (isNowLiked) {
             _likedPostIds.value = _likedPostIds.value + postId
             _likeCounts.value = _likeCounts.value + (postId to ((_likeCounts.value[postId] ?: 0) + 1))
@@ -172,12 +182,15 @@ class HomeViewModel(
             _likedPostIds.value = _likedPostIds.value - postId
             _likeCounts.value = _likeCounts.value + (postId to maxOf(0, (_likeCounts.value[postId] ?: 0) - 1))
         }
-        viewModelScope.launch {
+
+        _likeJobs[postId] = viewModelScope.launch {
+            delay(400) // debounce: only fire API if no further tap within 400ms
             try {
                 if (isNowLiked) postRepository.likePost(token, postId)
                 else postRepository.unlikePost(token, postId)
+                val serverCount = postRepository.getLikesForPost(token, postId)
+                _likeCounts.value = _likeCounts.value + (postId to serverCount)
             } catch (e: Exception) {
-                // Revert optimistic update on failure
                 if (isNowLiked) {
                     _likedPostIds.value = _likedPostIds.value - postId
                     _likeCounts.value = _likeCounts.value + (postId to maxOf(0, (_likeCounts.value[postId] ?: 1) - 1))
@@ -186,6 +199,8 @@ class HomeViewModel(
                     _likeCounts.value = _likeCounts.value + (postId to ((_likeCounts.value[postId] ?: 0) + 1))
                 }
                 android.util.Log.e("HomeViewModel", "Like failed: ${e.message}")
+            } finally {
+                _likeJobs.remove(postId)
             }
         }
     }
@@ -198,19 +213,30 @@ class HomeViewModel(
         }
     }
 
-    // -- Follow a user ---------------------------------------------
     fun followUser(token: String, targetUserId: Int) {
+        _followingUserIds.value = _followingUserIds.value + targetUserId
         viewModelScope.launch {
             try {
                 postRepository.followUser(token, targetUserId)
             } catch (e: Exception) {
-                // silent fail — UI already toggled optimistically
+                _followingUserIds.value = _followingUserIds.value - targetUserId
                 android.util.Log.e("HomeViewModel", "Follow failed: ${e.message}")
             }
         }
     }
 
-    // -- Report a post ---------------------------------------------
+    fun unfollowUser(token: String, targetUserId: Int) {
+        _followingUserIds.value = _followingUserIds.value - targetUserId
+        viewModelScope.launch {
+            try {
+                postRepository.unfollowUser(token, targetUserId)
+            } catch (e: Exception) {
+                _followingUserIds.value = _followingUserIds.value + targetUserId
+                android.util.Log.e("HomeViewModel", "Unfollow failed: ${e.message}")
+            }
+        }
+    }
+
     fun reportPost(token: String, postId: Int, reason: String, comment: String) {
         viewModelScope.launch {
             try {
@@ -221,15 +247,11 @@ class HomeViewModel(
         }
     }
 
-    // -- Delete a post ---------------------------------------------
     fun deletePost(token: String, postId: Int) {
         viewModelScope.launch {
             try {
                 postRepository.deletePost(token, postId)
-                // Remove from local list immediately
-                uiState = uiState.copy(
-                    posts = uiState.posts.filter { it.id != postId }
-                )
+                _posts.value = _posts.value.filter { it.id != postId }
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Delete failed: ${e.message}")
             }

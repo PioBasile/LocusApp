@@ -1,34 +1,19 @@
 package com.example.locus.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Reply
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import com.example.locus.R
 import com.example.locus.data.model.Post
 import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.ui.components.BottomNav
@@ -45,6 +30,7 @@ fun HomeScreen(
     currentUserId: Int? = null,
     isGuest: Boolean = false,
     onNavigate: (NavDestination) -> Unit = {},
+    onUserClick: (Int) -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val uiState = viewModel.uiState
@@ -52,8 +38,7 @@ fun HomeScreen(
     val myGroups by viewModel.userGroups.collectAsState()
 
     val currentPosts by viewModel.posts.collectAsState()
-    // null = Public Posts (group 0)
-    var currentGroup by remember { mutableStateOf<MyGroupResponse?>(null) }
+    val currentGroup = viewModel.selectedGroup
 
     var selectedPostIdForComments by remember { mutableStateOf<Int?>(null) }
     val currentComments by viewModel.currentComments.collectAsState()
@@ -63,39 +48,31 @@ fun HomeScreen(
         if (token.isNotEmpty()) {
             viewModel.loadUserGroups(token)
             viewModel.loadUserLikes(token)
+            viewModel.loadFollowing(token)
         }
-        viewModel.loadPostsForGroup(token, 0)
+        viewModel.loadPostsForGroup(token, currentGroup?.id ?: 0)
     }
-
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
     ) {
-
-        // -- Top bar -----------------------------------------------
         Topbar(
             showGroupSelector = true,
             selectedGroup = currentGroup,
             groups = myGroups,
             onGroupChange = { clickedGroup ->
-                currentGroup = clickedGroup
+                viewModel.selectGroup(clickedGroup)
                 viewModel.loadPostsForGroup(token, clickedGroup.id)
             }
         )
 
-        // -- Feed --------------------------------------------------
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(scrollState)
-                .padding(
-                    start = 12.dp,
-                    end = 12.dp,
-                    top = 12.dp,
-                    bottom = 8.dp
-                ),
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when {
@@ -121,9 +98,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
-                                onClick = {
-                                    viewModel.loadPostsForGroup(token, currentGroup?.id ?: 0)
-                                },
+                                onClick = { viewModel.loadPostsForGroup(token, currentGroup?.id ?: 0) },
                                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
                                 shape = RoundedCornerShape(50.dp)
                             ) {
@@ -147,17 +122,56 @@ fun HomeScreen(
                 }
                 else -> {
                     currentPosts.forEach { postResponse ->
-                        val descParts = postResponse.description.split("\n---loc:", limit = 2)
+                        val rawDesc = postResponse.description
+                        val tagsDelimiter = "\n---tags:"
+                        val locDelimiter = "\n---loc:"
+                        val tagsIdx = rawDesc.indexOf(tagsDelimiter)
+                        val locIdx = rawDesc.indexOf(locDelimiter)
+
+                        val caption: String
+                        val inlineTags: List<String>
+                        val locationName: String?
+
+                        when {
+                            tagsIdx != -1 && locIdx != -1 -> {
+                                caption = rawDesc.substring(0, tagsIdx)
+                                inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length, locIdx)
+                                    .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                locationName = rawDesc.substring(locIdx + locDelimiter.length).trim()
+                            }
+                            tagsIdx != -1 -> {
+                                caption = rawDesc.substring(0, tagsIdx)
+                                inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length)
+                                    .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                locationName = null
+                            }
+                            locIdx != -1 -> {
+                                caption = rawDesc.substring(0, locIdx)
+                                inlineTags = emptyList()
+                                locationName = rawDesc.substring(locIdx + locDelimiter.length).trim()
+                            }
+                            else -> {
+                                caption = rawDesc
+                                inlineTags = emptyList()
+                                locationName = null
+                            }
+                        }
+
+                        val serverTags = postResponse.tags?.filter { it.isNotBlank() } ?: emptyList()
+                        val allTags = (inlineTags + serverTags).distinct().takeIf { it.isNotEmpty() }
+
                         val postForUI = Post(
                             id = postResponse.id,
                             userId = postResponse.user_id,
                             username = "User ${postResponse.user_id}",
                             groupe = postResponse.groupe.firstOrNull() ?: 0,
-                            description = descParts[0],
+                            description = caption,
                             imageUrl = postResponse.imageUrl,
                             date = postResponse.date,
                             idLoc = postResponse.id_loc,
-                            locationName = if (descParts.size > 1) descParts[1].trim() else null
+                            locationName = locationName,
+                            audioUrl = postResponse.audioUrl,
+                            tags = allTags
                         )
 
                         Postcard(
@@ -168,14 +182,14 @@ fun HomeScreen(
                             onCommentClick = {
                                 viewModel.loadCommentsForPost(token, postForUI.id)
                                 selectedPostIdForComments = postForUI.id
-                            }
+                            },
+                            onUserClick = onUserClick
                         )
                     }
                 }
             }
         }
 
-        // -- Bottom nav --------------------------------------------
         BottomNav(
             selected = NavDestination.HOME,
             onSelect = onNavigate
@@ -187,36 +201,11 @@ fun HomeScreen(
             comments = currentComments,
             isLoading = isLoadingComments,
             viewModel = viewModel,
-            onDismiss = { selectedPostIdForComments = null }, // Ferme le tiroir
-            onSendComment = { text ->
-                viewModel.addComment(token, postId, text)
+            onDismiss = { selectedPostIdForComments = null },
+            onUserClick = onUserClick,
+            onSendComment = { text, audioFile ->
+                viewModel.addComment(token, postId, text, audioFile)
             }
         )
-    }
-}
-
-// -- Guest banner --------------------------------------------------------------
-@Composable
-private fun GuestBanner() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(NavyDark)
-            .padding(20.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "You're browsing as guest",
-                color = White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                text = "Log in to see posts, join groups and share your moments.",
-                color = White.copy(alpha = 0.7f),
-                fontSize = 13.sp
-            )
-        }
     }
 }

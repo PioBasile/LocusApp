@@ -17,6 +17,7 @@ import com.example.locus.ui.screens.ExploreScreen
 import com.example.locus.ui.screens.HomeScreen
 import com.example.locus.ui.screens.LoginScreen
 import com.example.locus.ui.screens.ProfileScreen
+import com.example.locus.ui.screens.PublicProfileScreen
 import com.example.locus.ui.screens.SignupScreen
 import com.example.locus.ui.theme.LocusTheme
 import com.example.locus.viewmodel.UserViewModel
@@ -33,7 +34,11 @@ class MainActivity : ComponentActivity() {
                 val uiState by viewModel.uiState.collectAsState()
                 var currentNav by remember { mutableStateOf(NavDestination.HOME) }
                 var showSignup by remember { mutableStateOf(false) }
+                var viewingUserId by remember { mutableStateOf<Int?>(null) }
 
+                val onUserClick: (Int) -> Unit = { userId ->
+                    if (userId != uiState.userId) viewingUserId = userId
+                }
 
                 when {
                     !uiState.isSuccess && !showSignup -> LoginScreen(
@@ -51,31 +56,43 @@ class MainActivity : ComponentActivity() {
                         onBackToLogin = { showSignup = false }
                     )
                     else -> {
-                        when (currentNav) {
-                            NavDestination.HOME -> HomeScreen(
+                        // Public profile overlay
+                        if (viewingUserId != null) {
+                            PublicProfileScreen(
+                                userId = viewingUserId!!,
                                 token = uiState.token ?: "",
                                 currentUserId = uiState.userId,
-                                isGuest = uiState.token == null,
-                                onNavigate = { currentNav = it }
+                                onBack = { viewingUserId = null }
                             )
-                            NavDestination.ADD -> AddPostScreen(
-                                onNavigate = { currentNav = it },
-                                token = uiState.token ?: "",
-                            )
-                            NavDestination.COMPASS -> HomeScreen(
-                                //token = uiState.token ?: "",
-                                onNavigate = { currentNav = it }
-                            )
-                            NavDestination.EXPLORE -> ExploreScreen(
-                                token = uiState.token ?: "",
-                                onNavigate = { currentNav = it }
-                            )
-                            NavDestination.PROFILE -> ProfileScreen(
-                                token = uiState.token ?: "",
-                                currentUserId = uiState.userId,
-                                onNavigate = { currentNav = it },
-                                onLogout = { viewModel.logout() }
-                            )
+                        } else {
+                            when (currentNav) {
+                                NavDestination.HOME -> HomeScreen(
+                                    token = uiState.token ?: "",
+                                    currentUserId = uiState.userId,
+                                    isGuest = uiState.token == null,
+                                    onNavigate = { currentNav = it },
+                                    onUserClick = onUserClick
+                                )
+                                NavDestination.ADD -> AddPostScreen(
+                                    onNavigate = { currentNav = it },
+                                    token = uiState.token ?: ""
+                                )
+                                NavDestination.COMPASS -> HomeScreen(
+                                    onNavigate = { currentNav = it }
+                                )
+                                NavDestination.EXPLORE -> ExploreScreen(
+                                    token = uiState.token ?: "",
+                                    currentUserId = uiState.userId,
+                                    onNavigate = { currentNav = it },
+                                    onUserClick = onUserClick
+                                )
+                                NavDestination.PROFILE -> ProfileScreen(
+                                    token = uiState.token ?: "",
+                                    currentUserId = uiState.userId,
+                                    onNavigate = { currentNav = it },
+                                    onLogout = { viewModel.logout() }
+                                )
+                            }
                         }
                     }
                 }

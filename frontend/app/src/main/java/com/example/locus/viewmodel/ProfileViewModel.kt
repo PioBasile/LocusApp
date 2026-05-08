@@ -24,6 +24,7 @@ import java.io.File
 data class ProfileUiState(
     val profile: ProfileResponse? = null,
     val followers: List<FollowerResponse> = emptyList(),
+    val following: List<FollowerResponse> = emptyList(),
     val userPosts: List<PostResponse> = emptyList(),
     val userGroupDetails: List<MyGroupResponse> = emptyList(),
     val groupCount: Int = 0,
@@ -49,6 +50,7 @@ class ProfileViewModel(
                     errorMessage = null,
                     profile = null,
                     followers = emptyList(),
+                    following = emptyList(),
                     userPosts = emptyList(),
                     userGroupDetails = emptyList(),
                     groupCount = 0
@@ -57,25 +59,24 @@ class ProfileViewModel(
             try {
                 val profileDeferred = async { repository.getProfile(token) }
                 val followersDeferred = async { repository.getFollowers(token) }
+                val followingDeferred = async { repository.getMyFollowing(token) }
                 val groupIdsDeferred = async { groupRepository.getMyGroups(token) }
 
                 val profile = profileDeferred.await()
                 val followers = followersDeferred.await()
+                val following = followingDeferred.await()
                 val groupIds = groupIdsDeferred.await()
 
-                // Fetch posts from every group the user belongs to + public (group 0), in parallel
                 val allGroupIds = (groupIds + 0).distinct()
                 val allPosts = allGroupIds
                     .map { groupId -> async { postRepository.getPostsByGroup(token, groupId) } }
                     .awaitAll()
                     .flatten()
 
-                // Deduplicate (a post can belong to multiple groups) then keep only this user's
                 val userPosts = allPosts
                     .distinctBy { it.id }
                     .filter { it.user_id == profile.id }
 
-                // Load group names for filter chips — parallel, group 0 handled locally
                 val namedGroups = mutableListOf(
                     MyGroupResponse(id = 0, name = "Public", isPrivate = false, description = null, imageUrl = null)
                 )
@@ -89,6 +90,7 @@ class ProfileViewModel(
                     it.copy(
                         profile = profile,
                         followers = followers,
+                        following = following,
                         groupCount = groupIds.size,
                         userPosts = userPosts,
                         userGroupDetails = namedGroups,
@@ -121,10 +123,28 @@ class ProfileViewModel(
                 }
             } catch (e: Exception) {
                 _uiState.update {
+                    it.copy(isLoading = false, errorMessage = "Upload failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun changeUsername(token: String, newUsername: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
+            try {
+                repository.changeUsername(token, newUsername)
+                val updatedProfile = repository.getProfile(token)
+                _uiState.update {
                     it.copy(
+                        profile = updatedProfile,
                         isLoading = false,
-                        errorMessage = "Upload failed: ${e.message}"
+                        successMessage = "Username updated!"
                     )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = "Failed to update username: ${e.message}")
                 }
             }
         }

@@ -27,5 +27,11 @@ data class Post(
     val idLoc: Int?,
 
     @SerializedName("location_name")
-    val locationName: String?
+    val locationName: String?,
+
+    @SerializedName("audio_url")
+    val audioUrl: String? = null,
+
+    @SerializedName("tags")
+    val tags: List<String>? = null
 )

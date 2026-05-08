@@ -18,15 +18,20 @@ interface ApiService {
     @GET("/getpost")
     suspend fun getPost(@Query("id") postId: Int): PostResponse
 
+    @GET("/getAllUserPosts")
+    suspend fun getAllUserPosts(@Query("user_id") userId: Int): List<PostResponse>
+
     // -- Posts (protected) -----------------------------------------
     @Multipart
     @POST("/makepost")
     suspend fun makePost(
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part,
+        @Part audio: MultipartBody.Part?,
         @Part("description") description: RequestBody,
         @Part("groupe") groupes: @JvmSuppressWildcards List<RequestBody>,
-        @Part("id_loc") idLoc: RequestBody
+        @Part("id_loc") idLoc: RequestBody,
+        @Part("ai_tags") aiTags: RequestBody
     ): String
 
     @GET("/getPostsByGroup")
@@ -41,11 +46,13 @@ interface ApiService {
         @Query("id") postId: Int
     ): String
 
+    @Multipart
     @POST("/comment")
     suspend fun postComment(
         @Header("Authorization") token: String,
         @Query("id") postId: Int,
-        @Query("comment") comment: String
+        @Part("comment") comment: RequestBody,
+        @Part audio: MultipartBody.Part?
     )
 
     @GET("/getComments")
@@ -159,6 +166,16 @@ interface ApiService {
         @Header("Authorization") token: String
     ): List<FollowerResponse>
 
+    @GET("/getMyFollowers")
+    suspend fun getMyFollowing(
+        @Header("Authorization") token: String
+    ): List<FollowerResponse>
+
+    @GET("/getMostFollowedUsers")
+    suspend fun getMostFollowedUsers(
+        @Query("limit") limit: Int = 5
+    ): List<FollowerResponse>
+
     // -- Paramètres Profil (protected) -----------------------------
     @Multipart
     @POST("/changePP")
@@ -166,6 +183,13 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Part image: MultipartBody.Part
     )
+
+    @FormUrlEncoded
+    @POST("/ChangeUsername")
+    suspend fun changeUsername(
+        @Header("Authorization") token: String,
+        @Field("username") username: String
+    ): String
 
     // -- Push notifications (protected) ----------------------------
     @POST("/updateFCMToken")

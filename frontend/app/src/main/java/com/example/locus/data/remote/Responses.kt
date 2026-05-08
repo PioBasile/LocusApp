@@ -14,15 +14,18 @@ data class PostResponse(
     val groupe: List<Int>,
     val description: String,
     @SerializedName("image_url") val imageUrl: String,
+    @SerializedName("audio_url") val audioUrl: String? = null,
+    val tags: List<String>? = null,
     val date: String,
-    val id_loc: Int?
+    val id_loc: Int? = null
 )
 
 // -- Profile -------------------------------------------------------------------
 data class PublicProfileResponse(
     val id: Int,
     val username: String,
-    val ppurl: String?
+    val ppurl: String?,
+    val posts: List<PostResponse>? = null
 )
 
 data class ProfileResponse(
@@ -82,6 +85,7 @@ data class MyGroupResponse(
 data class FollowerResponse(
     val id: Int,
     val username: String,
+    val ppurl: String? = null
 )
 
 // -- Profile pic ----------------------------------------------------------------
@@ -99,7 +103,10 @@ data class CommentResponse(
     @SerializedName("post_id")
     val postId: Int,
 
-    val commentaire: String
+    val commentaire: String,
+
+    @SerializedName("audio_url")
+    val audioUrl: String? = null
 )
 
 // -- Likes ......................................................................

@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.locus.ui.components.AudioPlayerBar
+import com.example.locus.ui.components.AudioRecorderButton
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Topbar
@@ -47,15 +49,15 @@ fun AddPostScreen(
     val context = LocalContext.current
     var caption by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
-
     var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var recordedAudio by remember { mutableStateOf<File?>(null) }
     val scrollState = rememberScrollState()
 
     val myGroups by viewModel.userGroups.collectAsState()
     var selectedGroupIds by remember { mutableStateOf(setOf<Int>()) }
     var showGroupDialog by remember { mutableStateOf(false) }
-
-    var isPublic by remember { mutableStateOf(true) } // Activé par défaut si tu veux
+    var isPublic by remember { mutableStateOf(true) }
+    var aiTagsEnabled by remember { mutableStateOf(false) }
 
     val selectableGroups = myGroups
 
@@ -64,14 +66,12 @@ fun AddPostScreen(
     ) { uri -> imageUri = uri }
 
     LaunchedEffect(Unit) {
-        if (token.isNotEmpty() ) {
-            viewModel.loadUserGroups(token)
-        }
+        if (token.isNotEmpty()) viewModel.loadUserGroups(token)
     }
 
     LaunchedEffect(viewModel.successMessage) {
         viewModel.successMessage?.let {
-            Toast.makeText(context, "Post partagé avec succès !", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Post shared!", Toast.LENGTH_SHORT).show()
             onNavigate(NavDestination.HOME)
             viewModel.clearMessages()
         }
@@ -79,61 +79,31 @@ fun AddPostScreen(
 
     LaunchedEffect(viewModel.errorMessage) {
         viewModel.errorMessage?.let {
-            Toast.makeText(context, "Erreur : $it", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error: $it", Toast.LENGTH_SHORT).show()
             viewModel.clearMessages()
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(OffWhite)
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(OffWhite)) {
         Topbar()
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(scrollState)
-        ) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(scrollState)) {
 
-            // -- Photo hero ----------
+            // -- Photo hero ----------------------------------------
             Button(
                 onClick = { imagePicker.launch("image/*") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp),
+                modifier = Modifier.fillMaxWidth().height(300.dp),
                 shape = RoundedCornerShape(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NavyDark,
-                    contentColor = White
-                ),
+                colors = ButtonDefaults.buttonColors(containerColor = NavyDark, contentColor = White),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (imageUri != null) {
-                        AsyncImage(
-                            model = imageUri,
-                            contentDescription = "Selected photo",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, NavyDark.copy(alpha = 0.6f)),
-                                        startY = 150f
-                                    )
-                                )
-                        )
+                        AsyncImage(model = imageUri, contentDescription = "Selected photo", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, NavyDark.copy(alpha = 0.6f)), startY = 150f)))
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -142,30 +112,12 @@ fun AddPostScreen(
                                 .background(NavyDark.copy(alpha = 0.7f))
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(
-                                text = "Change",
-                                color = White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text(text = "Change", color = White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.AddPhotoAlternate,
-                                contentDescription = "Add photo",
-                                tint = White.copy(alpha = 0.4f),
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Text(
-                                text = "Tap to select a photo",
-                                color = White.copy(alpha = 0.5f),
-                                fontSize = 14.sp,
-                                fontStyle = FontStyle.Italic
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(imageVector = Icons.Filled.AddPhotoAlternate, contentDescription = "Add photo", tint = White.copy(alpha = 0.4f), modifier = Modifier.size(56.dp))
+                            Text(text = "Tap to select a photo", color = White.copy(alpha = 0.5f), fontSize = 14.sp, fontStyle = FontStyle.Italic)
                         }
                     }
                 }
@@ -173,87 +125,121 @@ fun AddPostScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // -- Form fields ---------------------------------------
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                JournalField(
-                    value = caption,
-                    onValueChange = { caption = it },
-                    label = "Caption",
-                    placeholder = "What's the story?",
-                    maxLines = 3
-                )
 
-                JournalField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = "Location",
-                    placeholder = "Where was this?",
-                    leadingIcon = {
-                        Icon(
-                            Icons.Filled.LocationOn,
-                            contentDescription = null,
-                            tint = GoldPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-
+                // -- Caption + mic ----------------------------------------
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "VISIBILITY",
-                        color = NavyDark.copy(alpha = 0.5f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
-                    )
+                    Text(text = "CAPTION", color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(White)
                             .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(text = "Public Post", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            Text(text = "Show in the global Public Posts feed", color = InputHint, fontSize = 12.sp)
-                        }
-                        Switch(
-                            checked = isPublic,
-                            onCheckedChange = { isPublic = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = White,
-                                checkedTrackColor = GoldPrimary,
-                                uncheckedThumbColor = InputHint,
-                                uncheckedTrackColor = Color.LightGray
-                            )
+                        OutlinedTextField(
+                            value = caption,
+                            onValueChange = { caption = it },
+                            placeholder = { Text(text = "What's the story?", color = InputHint, fontSize = 14.sp, fontStyle = FontStyle.Italic) },
+                            maxLines = 3,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = White,
+                                focusedContainerColor = White,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                cursorColor = NavyDark,
+                                unfocusedTextColor = NavyDark,
+                                focusedTextColor = NavyDark
+                            ),
+                            modifier = Modifier.weight(1f)
                         )
+                        AudioRecorderButton(
+                            recordedFile = recordedAudio,
+                            onRecordingDone = { recordedAudio = it },
+                            onCleared = { recordedAudio = null },
+                            tintColor = NavyDark
+                        )
+                    }
+                    if (recordedAudio != null) {
+                        AudioPlayerBar(audioUrl = recordedAudio!!.absolutePath, tintColor = NavyDark, bgColor = NavyDark.copy(alpha = 0.08f))
                     }
                 }
 
-                // -- Group dropdown --------------------------------
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "SPECIFIC GROUPS",
-                        color = NavyDark.copy(alpha = 0.5f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.sp
+                // -- Location field ---------------------------------------
+                JournalField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = "Location",
+                    placeholder = "Where was this?",
+                    leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp)) }
+                )
+
+                // -- AI Tags toggle ---------------------------------------
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(White)
+                        .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(text = "AI Tags", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(text = "Automatically tag this post with AI", color = InputHint, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = aiTagsEnabled,
+                        onCheckedChange = { aiTagsEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = White,
+                            checkedTrackColor = GoldPrimary,
+                            uncheckedThumbColor = InputHint,
+                            uncheckedTrackColor = Color.LightGray
+                        )
                     )
+                }
+
+                // -- Visibility toggle ------------------------------------
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(White)
+                        .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(text = "Public Post", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(text = "Show in the global Public Posts feed", color = InputHint, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = White,
+                            checkedTrackColor = GoldPrimary,
+                            uncheckedThumbColor = InputHint,
+                            uncheckedTrackColor = Color.LightGray
+                        )
+                    )
+                }
+
+                // -- Group picker -----------------------------------------
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(text = "SPECIFIC GROUPS", color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                     Box {
-                        val groupDisplayText = if (selectedGroupIds.isEmpty()) {
-                            "Select groups (Optional)"
-                        } else {
-                            selectableGroups.filter { it.id in selectedGroupIds }
-                                .joinToString(", ") { it.name }
-                        }
+                        val groupDisplayText = if (selectedGroupIds.isEmpty()) "Select groups (Optional)"
+                        else selectableGroups.filter { it.id in selectedGroupIds }.joinToString(", ") { it.name }
 
                         OutlinedTextField(
                             value = groupDisplayText,
@@ -272,7 +258,7 @@ fun AddPostScreen(
                                 unfocusedBorderColor = InputBorder,
                                 focusedBorderColor = NavyDark,
                                 unfocusedTextColor = if (selectedGroupIds.isEmpty()) InputHint else NavyDark,
-                                focusedTextColor = NavyDark,
+                                focusedTextColor = NavyDark
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -286,44 +272,21 @@ fun AddPostScreen(
                     }
                 }
 
-                // -- Dialog Multi-Sélection ------------------------
                 if (showGroupDialog) {
                     AlertDialog(
                         onDismissRequest = { showGroupDialog = false },
                         title = { Text("Select Groups", color = NavyDark, fontWeight = FontWeight.Bold) },
                         text = {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 300.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
+                            Column(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                                 selectableGroups.forEach { group ->
                                     val isChecked = selectedGroupIds.contains(group.id)
                                     Surface(
-                                        onClick = {
-                                            selectedGroupIds = if (isChecked) {
-                                                selectedGroupIds - group.id
-                                            } else {
-                                                selectedGroupIds + group.id
-                                            }
-                                        },
+                                        onClick = { selectedGroupIds = if (isChecked) selectedGroupIds - group.id else selectedGroupIds + group.id },
                                         color = Color.Transparent,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Checkbox(
-                                                checked = isChecked,
-                                                onCheckedChange = null,
-                                                colors = CheckboxDefaults.colors(
-                                                    checkedColor = GoldPrimary,
-                                                    checkmarkColor = White,
-                                                    uncheckedColor = InputBorder
-                                                )
-                                            )
+                                        Row(modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(checked = isChecked, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = GoldPrimary, checkmarkColor = White, uncheckedColor = InputBorder))
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(text = group.name, color = NavyDark, fontSize = 16.sp)
                                         }
@@ -331,11 +294,7 @@ fun AddPostScreen(
                                 }
                             }
                         },
-                        confirmButton = {
-                            TextButton(onClick = { showGroupDialog = false }) {
-                                Text("Done", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            }
-                        },
+                        confirmButton = { TextButton(onClick = { showGroupDialog = false }) { Text("Done", color = GoldPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp) } },
                         containerColor = White,
                         shape = RoundedCornerShape(16.dp)
                     )
@@ -347,27 +306,21 @@ fun AddPostScreen(
                     onClick = {
                         imageUri?.let { uri ->
                             val imageFile = getFileFromUri(context, uri)
-
                             val groupsListToPost = selectedGroupIds.toMutableList()
-                            if (isPublic && !groupsListToPost.contains(0)) {
-                                groupsListToPost.add(0)
-                            }
+                            if (isPublic && !groupsListToPost.contains(0)) groupsListToPost.add(0)
 
-                            val fullDescription = if (location.isBlank()) caption
-                                                  else "$caption\n---loc:$location"
+                            val locPart = if (location.isNotBlank()) "\n---loc:$location" else ""
+                            val fullDescription = "$caption$locPart"
 
                             if (imageFile != null) {
-                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1)
+                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1, audioFile = recordedAudio, aiTags = aiTagsEnabled)
                             } else {
-                                Toast.makeText(context, "Erreur avec l'image", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Image error", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
-                    // Le bouton est cliquable même si pas de groupe sélectionné (si c'est public par exemple)
-                    enabled = imageUri != null && caption.isNotBlank() && !viewModel.isLoading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
+                    enabled = imageUri != null && !viewModel.isLoading,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(50.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = NavyDark,
@@ -380,12 +333,7 @@ fun AddPostScreen(
                     if (viewModel.isLoading) {
                         CircularProgressIndicator(color = White, modifier = Modifier.size(24.dp))
                     } else {
-                        Text(
-                            text = "Share Moment",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            letterSpacing = 0.5.sp
-                        )
+                        Text(text = "Share Moment", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.5.sp)
                     }
                 }
 
@@ -393,10 +341,7 @@ fun AddPostScreen(
             }
         }
 
-        BottomNav(
-            selected = NavDestination.ADD,
-            onSelect = onNavigate
-        )
+        BottomNav(selected = NavDestination.ADD, onSelect = onNavigate)
     }
 }
 
@@ -410,24 +355,11 @@ private fun JournalField(
     leadingIcon: @Composable (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = label.uppercase(),
-            color = NavyDark.copy(alpha = 0.5f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp
-        )
+        Text(text = label.uppercase(), color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    color = InputHint,
-                    fontSize = 14.sp,
-                    fontStyle = FontStyle.Italic
-                )
-            },
+            placeholder = { Text(text = placeholder, color = InputHint, fontSize = 14.sp, fontStyle = FontStyle.Italic) },
             maxLines = maxLines,
             shape = RoundedCornerShape(12.dp),
             leadingIcon = leadingIcon,
@@ -438,7 +370,7 @@ private fun JournalField(
                 focusedBorderColor = NavyDark,
                 cursorColor = NavyDark,
                 unfocusedTextColor = NavyDark,
-                focusedTextColor = NavyDark,
+                focusedTextColor = NavyDark
             ),
             modifier = Modifier.fillMaxWidth()
         )

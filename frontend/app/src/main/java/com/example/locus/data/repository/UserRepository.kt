@@ -2,12 +2,12 @@ package com.example.locus.data.repository
 
 import android.net.Uri
 import com.example.locus.data.remote.FCMTokenRequest
+import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.LoginRequest
 import com.example.locus.data.remote.LoginResponse
 import com.example.locus.data.remote.ProfileResponse
 import com.example.locus.data.remote.RetrofitClient
 import com.example.locus.data.remote.SignupResponse
-import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.ChangePPResponse
 
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -35,8 +35,11 @@ class UserRepository {
     suspend fun uploadProfilePicture(token: String, imageFile: File) {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
         val body = MultipartBody.Part.createFormData("profile_picture", imageFile.name, requestFile)
-
         api.changeProfilePicture(token, body)
+    }
+
+    suspend fun changeUsername(token: String, username: String): String {
+        return api.changeUsername(token, username)
     }
 
     // -- Social (Followers) ----------------------------------------
@@ -52,7 +55,22 @@ class UserRepository {
         return try {
             api.getFollowers(token)
         } catch (e: Exception) {
-            println("Error when getting followers  : ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun getMyFollowing(token: String): List<FollowerResponse> {
+        return try {
+            api.getMyFollowing(token)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getTopUsers(limit: Int = 5): List<FollowerResponse> {
+        return try {
+            api.getMostFollowedUsers(limit)
+        } catch (e: Exception) {
             emptyList()
         }
     }

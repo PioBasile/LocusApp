@@ -2,6 +2,7 @@ package com.example.locus.data.repository
 
 import com.example.locus.data.model.Post
 import com.example.locus.data.remote.CommentResponse
+import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.PostResponse
 import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.remote.RetrofitClient
@@ -26,7 +27,6 @@ class PostRepository {
         return try {
             api.getPostsByGroup(token, groupId)
         } catch (e: Exception) {
-            println("Erreur chargement des posts : ${e.message}")
             emptyList()
         }
     }
@@ -35,6 +35,13 @@ class PostRepository {
         return api.getPublicProfile(userId)
     }
 
+    suspend fun getAllUserPosts(userId: Int): List<PostResponse> {
+        return try {
+            api.getAllUserPosts(userId)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     // -- Create ----------------------------------------------------
     suspend fun uploadPost(
@@ -42,37 +49,50 @@ class PostRepository {
         imageFile: File,
         description: String,
         groupIds: List<Int>,
-        locationId: Int
+        locationId: Int,
+        audioFile: File? = null,
+        aiTags: Boolean = true
     ): String {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
         val imagePart = MultipartBody.Part.createFormData("image", imageFile.name, requestFile)
 
+        val audioPart = audioFile?.let { file ->
+            val audioRequestFile = file.asRequestBody("audio/mp4".toMediaTypeOrNull())
+            MultipartBody.Part.createFormData("audio", file.name, audioRequestFile)
+        }
+
         val descriptionPart = description.toRequestBody("text/plain".toMediaTypeOrNull())
-        val groupParts = groupIds.map { groupId -> groupId.toString().toRequestBody("text/plain".toMediaTypeOrNull()) }
+        val groupParts = groupIds.map { it.toString().toRequestBody("text/plain".toMediaTypeOrNull()) }
         val locationPart = locationId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+        val aiTagsPart = aiTags.toString().toRequestBody("text/plain".toMediaTypeOrNull())
 
         return api.makePost(
             token = token,
             image = imagePart,
+            audio = audioPart,
             description = descriptionPart,
             groupes = groupParts,
-            idLoc = locationPart
+            idLoc = locationPart,
+            aiTags = aiTagsPart
         )
     }
 
     // -- Comments -------------------------------------------------------
-
     suspend fun getComments(token: String, postId: Int): List<CommentResponse> {
         return try {
             api.getComments(token, postId)
         } catch (e: Exception) {
-            println("Erreur chargement des commentaires : ${e.message}")
             emptyList()
         }
     }
 
-    suspend fun addComment(token: String, postId: Int, comment: String) {
-        api.postComment(token, postId, comment)
+    suspend fun addComment(token: String, postId: Int, comment: String, audioFile: File? = null) {
+        val commentPart = comment.toRequestBody("text/plain".toMediaTypeOrNull())
+        val audioPart = audioFile?.let { file ->
+            val audioRequestFile = file.asRequestBody("audio/mp4".toMediaTypeOrNull())
+            MultipartBody.Part.createFormData("audio", file.name, audioRequestFile)
+        }
+        api.postComment(token, postId, commentPart, audioPart)
     }
 
     // -- Like ------------------------------------------------------------
@@ -100,9 +120,17 @@ class PostRepository {
         }
     }
 
-    // -- Follow a user ---------------------------------------------
+    // -- Follow / unfollow -----------------------------------------
     suspend fun followUser(token: String, targetUserId: Int): String {
         return api.followUser(token, targetUserId)
+    }
+
+    suspend fun unfollowUser(token: String, targetUserId: Int): String {
+        return api.unfollowUser(token, targetUserId)
+    }
+
+    suspend fun getMyFollowing(token: String): List<FollowerResponse> {
+        return try { api.getMyFollowing(token) } catch (e: Exception) { emptyList() }
     }
 
     // -- Report a post ---------------------------------------------

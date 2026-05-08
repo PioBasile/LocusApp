@@ -147,8 +147,10 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Notification push
 	go NotifyGroupMembersPush(groupIDs, userID, description)
-	// IA
-	go GenerateAndSaveTags(lastID, description, dstPath)
+	// IA — skip if caller opted out
+	if r.FormValue("ai_tags") != "false" {
+		go GenerateAndSaveTags(lastID, description, dstPath)
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Post créé avec succès ! Groupes associés : %v", groupIDs)

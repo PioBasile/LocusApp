@@ -33,14 +33,24 @@ class ExploreViewModel(
     var uiState by mutableStateOf(ExploreUiState())
         private set
 
-    private val _followers = MutableStateFlow<List<FollowerResponse>>(emptyList())
-    val followers: StateFlow<List<FollowerResponse>> = _followers.asStateFlow()
+    private val _topUsers = MutableStateFlow<List<FollowerResponse>>(emptyList())
+    val topUsers: StateFlow<List<FollowerResponse>> = _topUsers.asStateFlow()
 
     private val _followedUserIds = MutableStateFlow<Set<Int>>(emptySet())
     val followedUserIds: StateFlow<Set<Int>> = _followedUserIds.asStateFlow()
 
+    private val _myGroupIds = MutableStateFlow<Set<Int>>(emptySet())
+    val myGroupIds: StateFlow<Set<Int>> = _myGroupIds.asStateFlow()
+
     init {
         loadGroups()
+        loadTopUsers()
+    }
+
+    fun loadMyGroups(token: String) {
+        viewModelScope.launch {
+            _myGroupIds.value = groupRepository.getMyGroups(token).toSet()
+        }
     }
 
     fun loadGroups() {
@@ -58,10 +68,25 @@ class ExploreViewModel(
         }
     }
 
+    fun loadFollowingIds(token: String) {
+        viewModelScope.launch {
+            try {
+                _followedUserIds.value = userRepository.getMyFollowing(token).map { it.id }.toSet()
+            } catch (e: Exception) { }
+        }
+    }
+
+    fun loadTopUsers() {
+        viewModelScope.launch {
+            _topUsers.value = userRepository.getTopUsers(50)
+        }
+    }
+
     fun joinGroup(token: String, groupId: Int, password: String = "") {
         viewModelScope.launch {
             try {
                 val result = groupRepository.joinGroup(token, groupId, password)
+                _myGroupIds.value = _myGroupIds.value + groupId
                 uiState = uiState.copy(joinSuccess = result.message, joinError = null)
             } catch (e: Exception) {
                 uiState = uiState.copy(
@@ -94,16 +119,6 @@ class ExploreViewModel(
         }
     }
 
-    fun loadFollowers(token: String) {
-        viewModelScope.launch {
-            try {
-                _followers.value = userRepository.getFollowers(token)
-            } catch (e: Exception) {
-                android.util.Log.e("ExploreViewModel", "Failed to load followers: ${e.message}")
-            }
-        }
-    }
-
     fun followUser(token: String, targetUserId: Int) {
         _followedUserIds.value = _followedUserIds.value + targetUserId
         viewModelScope.launch {
@@ -127,6 +142,9 @@ class ExploreViewModel(
             }
         }
     }
+
+    suspend fun getGroupMemberCount(groupId: Int): Int =
+        try { groupRepository.getGroupDetails(groupId)?.members?.size ?: 0 } catch (e: Exception) { 0 }
 
     fun clearMessages() {
         uiState = uiState.copy(
