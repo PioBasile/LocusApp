@@ -44,6 +44,7 @@ func setupRoutes() {
 	http.HandleFunc("/deletePost", handlers.IsAuthorized(handlers.DeletePostHandler))
 	http.HandleFunc("/updateFCMToken", handlers.IsAuthorized(handlers.UpdateFCMTokenHandler))
 	http.HandleFunc("/ChangeUsername", handlers.IsAuthorized(handlers.ChangeUsernameHandler))
+	http.HandleFunc("/getMyFollowers", handlers.IsAuthorized(handlers.GetMyFollowersHandler))
 	
 	
 	

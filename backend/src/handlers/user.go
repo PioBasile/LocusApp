@@ -165,3 +165,21 @@ func ChangeUsernameHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Nom d'utilisateur mis à jour avec succès !"})
 }
+
+
+func GetMyFollowersHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(UserIDKey).(int)
+	var followers []lib.FollowerInfo
+	query := `SELECT u.usr_id as id, u.username, u.url_pp as ppurl 
+			  FROM Followers f 
+			  JOIN Utilisateurs u ON f.followed_id = u.usr_id 
+			  WHERE f.follower_id = $1`
+	err := db.Select(&followers, query, userID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des followers", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(followers)
+}

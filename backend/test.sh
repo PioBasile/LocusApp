@@ -323,6 +323,11 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/unfollow" \
     -H "Authorization: $TOKEN" -F "user_id=$MY_ID")
 check "POST /unfollow → 200" "$STATUS" 200
 
+echo "[FOLLOWERS] Récupérer tout mes followers"
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$BASE_URL/getMyFollowers" \
+    -H "Authorization: $TOKEN")
+check "GET /getMyFollowers → 200" "$STATUS" 200
+
 
 # ────────────────────────────────────────────────────
 # LOCALISATION
