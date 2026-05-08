@@ -85,9 +85,9 @@ class ExploreViewModel(
     fun joinGroup(token: String, groupId: Int, password: String = "") {
         viewModelScope.launch {
             try {
-                val result = groupRepository.joinGroup(token, groupId, password)
+                groupRepository.joinGroup(token, groupId, password)
                 _myGroupIds.value = _myGroupIds.value + groupId
-                uiState = uiState.copy(joinSuccess = result.message, joinError = null)
+                uiState = uiState.copy(joinSuccess = "You've joined the group!", joinError = null)
             } catch (e: Exception) {
                 uiState = uiState.copy(
                     joinError = e.localizedMessage ?: "Failed to join group",
@@ -107,8 +107,8 @@ class ExploreViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val result = groupRepository.makeGroup(token, name, description, isPrivate, password, imageFile)
-                uiState = uiState.copy(createSuccess = result.message, createError = null)
+                groupRepository.makeGroup(token, name, description, isPrivate, password, imageFile)
+                uiState = uiState.copy(createSuccess = "Group created successfully!", createError = null)
                 loadGroups()
             } catch (e: Exception) {
                 uiState = uiState.copy(

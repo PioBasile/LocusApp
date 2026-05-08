@@ -1,10 +1,16 @@
 package com.example.locus.ui.screens
 
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,11 +31,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -51,7 +59,6 @@ fun ExploreScreen(
     onUserClick: (Int) -> Unit = {},
     viewModel: ExploreViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val uiState = viewModel.uiState
     val topUsers by viewModel.topUsers.collectAsState()
     val followedUserIds by viewModel.followedUserIds.collectAsState()
@@ -61,7 +68,8 @@ fun ExploreScreen(
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    var notificationMessage by remember { mutableStateOf<String?>(null) }
+    var notificationIsError by remember { mutableStateOf(false) }
 
     LaunchedEffect(token) {
         if (token.isNotEmpty()) {
@@ -71,47 +79,33 @@ fun ExploreScreen(
     }
 
     LaunchedEffect(uiState.joinSuccess) {
-        uiState.joinSuccess?.let {
-            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
-            viewModel.clearMessages()
-        }
+        uiState.joinSuccess?.let { notificationMessage = it; notificationIsError = false; viewModel.clearMessages() }
     }
     LaunchedEffect(uiState.joinError) {
-        uiState.joinError?.let {
-            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
-            viewModel.clearMessages()
-        }
+        uiState.joinError?.let { notificationMessage = it; notificationIsError = true; viewModel.clearMessages() }
     }
     LaunchedEffect(uiState.createSuccess) {
-        uiState.createSuccess?.let {
-            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
-            viewModel.clearMessages()
-        }
+        uiState.createSuccess?.let { notificationMessage = it; notificationIsError = false; viewModel.clearMessages() }
     }
     LaunchedEffect(uiState.createError) {
-        uiState.createError?.let {
-            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
-            viewModel.clearMessages()
-        }
+        uiState.createError?.let { notificationMessage = it; notificationIsError = true; viewModel.clearMessages() }
+    }
+    LaunchedEffect(notificationMessage) {
+        if (notificationMessage != null) { delay(2500); notificationMessage = null }
     }
 
     if (showCreateDialog) {
-        CreateGroupDialog(
-            token = token,
+        CreateGroupSheet(
             onDismiss = { showCreateDialog = false },
             onCreate = { name, description, isPrivate, password, imageFile ->
-                if (imageFile != null) {
-                    viewModel.createGroup(token, name, description, isPrivate, password, imageFile)
-                    showCreateDialog = false
-                } else {
-                    Toast.makeText(context, "An image is required", Toast.LENGTH_SHORT).show()
-                }
+                viewModel.createGroup(token, name, description, isPrivate, password, imageFile)
+                showCreateDialog = false
             }
         )
     }
 
     joinTargetGroup?.let { group ->
-        JoinPrivateGroupDialog(
+        JoinPrivateGroupSheet(
             groupName = group.name,
             onDismiss = { joinTargetGroup = null },
             onJoin = { password -> viewModel.joinGroup(token, group.id, password); joinTargetGroup = null }
@@ -245,18 +239,28 @@ fun ExploreScreen(
             BottomNav(selected = NavDestination.EXPLORE, onSelect = onNavigate)
         }
 
-        SnackbarHost(
-            hostState = snackbarHostState,
+        AnimatedVisibility(
+            visible = notificationMessage != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.88f),
+            exit = fadeOut() + scaleOut(targetScale = 0.88f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 72.dp)
-        ) { data ->
-            Snackbar(
-                snackbarData = data,
-                containerColor = NavyDark,
-                contentColor = White,
-                shape = RoundedCornerShape(12.dp)
-            )
+                .padding(bottom = 88.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50.dp))
+                    .background(NavyDark.copy(alpha = 0.93f))
+                    .padding(horizontal = 28.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = notificationMessage ?: "",
+                    color = White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
@@ -503,12 +507,12 @@ private fun GroupCard(group: Group, viewModel: ExploreViewModel, isJoined: Boole
     }
 }
 
-// -- Create group dialog -------------------------------------------------------
+// -- Create group sheet --------------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CreateGroupDialog(
-    token: String,
+private fun CreateGroupSheet(
     onDismiss: () -> Unit,
-    onCreate: (name: String, description: String, isPrivate: Boolean, password: String, imageFile: java.io.File?) -> Unit
+    onCreate: (name: String, description: String, isPrivate: Boolean, password: String, imageFile: java.io.File) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -516,89 +520,279 @@ private fun CreateGroupDialog(
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
     var imageUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    val imagePicker = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri -> imageUri = uri }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> imageUri = uri }
 
-    AlertDialog(
+    val canCreate = name.isNotBlank() && imageUri != null
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = White,
-        title = { Text(text = "Create a Group", color = NavyDark, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(10.dp)).background(OffWhite),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (imageUri != null) {
-                        AsyncImage(model = imageUri, contentDescription = "Group Image", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        Button(onClick = { imagePicker.launch("image/*") }, colors = ButtonDefaults.buttonColors(containerColor = NavyDark.copy(alpha = 0.7f))) { Text("Change Image", color = White) }
-                    } else {
-                        OutlinedButton(onClick = { imagePicker.launch("image/*") }, shape = RoundedCornerShape(8.dp)) {
-                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null, tint = NavyDark)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Add Group Cover", color = NavyDark)
-                        }
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(top = 32.dp, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("New Group", color = NavyDark, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Build a community around a place you love", color = MediumGray, fontSize = 13.sp)
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Cover photo picker
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(OffWhite)
+                    .border(1.dp, if (imageUri == null) LightGray else Color.Transparent, RoundedCornerShape(18.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { imagePicker.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUri != null) {
+                    AsyncImage(
+                        model = imageUri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.28f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Tap to change", color = White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
-                }
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Group name") }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NavyDark, cursorColor = NavyDark), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, maxLines = 2, shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NavyDark, cursorColor = NavyDark), modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isPrivate, onCheckedChange = { isPrivate = it }, colors = CheckboxDefaults.colors(checkedColor = NavyDark))
-                    Text(text = "Private group", color = NavyDark, fontSize = 14.sp)
-                }
-                if (isPrivate) {
-                    OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NavyDark, cursorColor = NavyDark), modifier = Modifier.fillMaxWidth())
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null, tint = MediumGray, modifier = Modifier.size(32.dp))
+                        Text("Add cover photo", color = MediumGray, fontSize = 13.sp)
+                    }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        val imageFile = imageUri?.let { uri -> getFileFromUri(context, uri) }
-                        onCreate(name, description, isPrivate, password, imageFile)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
-                shape = RoundedCornerShape(50.dp)
-            ) { Text("Create", color = White) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MediumGray) } }
-    )
-}
 
-// -- Join private group dialog -------------------------------------------------
-@Composable
-private fun JoinPrivateGroupDialog(groupName: String, onDismiss: () -> Unit, onJoin: (password: String) -> Unit) {
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Group name") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NavyDark,
+                    unfocusedBorderColor = LightGray,
+                    cursorColor = NavyDark,
+                    unfocusedContainerColor = OffWhite,
+                    focusedContainerColor = White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = White,
-        title = { Text(text = "Join \"$groupName\"", color = NavyDark, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "This is a private group. Enter the password to join.", color = MediumGray, fontSize = 13.sp)
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Description (optional)") },
+                maxLines = 3,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NavyDark,
+                    unfocusedBorderColor = LightGray,
+                    cursorColor = NavyDark,
+                    unfocusedContainerColor = OffWhite,
+                    focusedContainerColor = White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Private toggle row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(OffWhite)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = if (isPrivate) NavyDark else MediumGray,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Private group", color = NavyDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Members join by password only", color = MediumGray, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = isPrivate,
+                    onCheckedChange = { isPrivate = it },
+                    colors = SwitchDefaults.colors(checkedThumbColor = White, checkedTrackColor = NavyDark)
+                )
+            }
+
+            if (isPrivate) {
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
+                    label = { Text("Group password") },
                     singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null, tint = MediumGray)
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NavyDark, cursorColor = NavyDark),
+                    shape = RoundedCornerShape(14.dp),
+                    visualTransformation = PasswordVisualTransformation(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NavyDark,
+                        unfocusedBorderColor = LightGray,
+                        cursorColor = NavyDark,
+                        unfocusedContainerColor = OffWhite,
+                        focusedContainerColor = White
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        },
-        confirmButton = {
-            Button(onClick = { if (password.isNotBlank()) onJoin(password) }, enabled = password.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = NavyDark), shape = RoundedCornerShape(50.dp)) { Text("Join", color = White) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MediumGray) } }
-    )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = {
+                    val imageFile = imageUri?.let { uri -> getFileFromUri(context, uri) }
+                    if (imageFile != null) onCreate(name, description, isPrivate, password, imageFile)
+                },
+                enabled = canCreate,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NavyDark, contentColor = White),
+                elevation = ButtonDefaults.buttonElevation(0.dp)
+            ) {
+                Text("Create Group", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            }
+
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel", color = MediumGray, fontSize = 14.sp)
+            }
+        }
+    }
+}
+
+// -- Join private group sheet --------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun JoinPrivateGroupSheet(groupName: String, onDismiss: () -> Unit, onJoin: (password: String) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = White,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp)
+                .padding(top = 32.dp, bottom = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(NavyDark.copy(alpha = 0.07f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.Lock, contentDescription = null, tint = NavyDark, modifier = Modifier.size(28.dp))
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "PRIVATE GROUP",
+                color = MediumGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = groupName,
+                color = NavyDark,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Enter the password to join this community",
+                color = MediumGray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                placeholder = { Text("Password", color = InputHint, fontSize = 14.sp) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            contentDescription = null,
+                            tint = MediumGray
+                        )
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NavyDark,
+                    unfocusedBorderColor = LightGray,
+                    cursorColor = NavyDark,
+                    unfocusedContainerColor = OffWhite,
+                    focusedContainerColor = White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { if (password.isNotBlank()) onJoin(password) },
+                enabled = password.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NavyDark, contentColor = White),
+                elevation = ButtonDefaults.buttonElevation(0.dp)
+            ) {
+                Text("Join Group", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel", color = MediumGray, fontSize = 14.sp)
+            }
+        }
+    }
 }
