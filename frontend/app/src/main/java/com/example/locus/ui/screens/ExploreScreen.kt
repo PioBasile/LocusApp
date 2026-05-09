@@ -116,7 +116,7 @@ fun ExploreScreen(
         Column(modifier = Modifier.fillMaxSize().background(OffWhite)) {
             Topbar()
 
-            Column(modifier = Modifier.weight(1f).verticalScroll(scrollState).padding(bottom = 8.dp)) {
+            Column(modifier = Modifier.weight(1f).verticalScroll(scrollState).padding(bottom = 100.dp)) {
 
                 // -- Search bar ----------------------------------------
                 OutlinedTextField(
@@ -236,8 +236,9 @@ fun ExploreScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            BottomNav(selected = NavDestination.EXPLORE, onSelect = onNavigate)
         }
+
+        BottomNav(selected = NavDestination.EXPLORE, onSelect = onNavigate, modifier = Modifier.align(Alignment.BottomCenter))
 
         AnimatedVisibility(
             visible = notificationMessage != null,

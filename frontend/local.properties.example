@@ -1,0 +1,15 @@
+# Copy this file to local.properties and fill in your values.
+# local.properties is gitignored and must never be committed.
+
+# Android SDK path (set automatically by Android Studio)
+sdk.dir=/path/to/your/Android/Sdk
+
+# Mapbox — https://account.mapbox.com/access-tokens/
+# Secret token (sk.*): needs DOWNLOADS:READ scope, used only at build time
+MAPBOX_DOWNLOADS_TOKEN=sk.eyJ1...your_secret_token
+
+# Public token (pk.*): used at runtime inside the app
+MAPBOX_PUBLIC_TOKEN=pk.eyJ1...your_public_token
+
+# Backend API base URL (must end with /)
+API_BASE_URL=http://your-api-url/

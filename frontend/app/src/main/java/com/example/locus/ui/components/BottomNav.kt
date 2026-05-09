@@ -1,7 +1,9 @@
 package com.example.locus.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -29,6 +31,7 @@ fun BottomNav(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -59,14 +62,23 @@ fun BottomNav(
                 )
 
                 // -- Compass center —-
+                val isCompassSelected = selected == NavDestination.COMPASS
                 IconButton(
                     onClick = { onSelect(NavDestination.COMPASS) },
-                    modifier = Modifier.size(60.dp)
+                    modifier = Modifier
+                        .size(60.dp)
+                        .then(
+                            if (isCompassSelected)
+                                Modifier
+                                    .clip(CircleShape)
+                                    .border(2.5.dp, GoldPrimary, CircleShape)
+                            else Modifier
+                        )
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_logo),
                         contentDescription = "Compass",
-                        tint = Color.Unspecified, // preserves gold + navy from SVG
+                        tint = Color.Unspecified,
                         modifier = Modifier.size(44.dp)
                     )
                 }

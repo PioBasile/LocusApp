@@ -16,6 +16,19 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+
+        val localProps = java.util.Properties().also { props ->
+            rootProject.projectDir.resolve("local.properties")
+                .takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+        }
+        maven {
+            url = uri("https://api.mapbox.com/downloads/v2/releases/maven")
+            authentication { create<HttpHeaderAuthentication>("header") }
+            credentials(HttpHeaderCredentials::class) {
+                name = "Authorization"
+                value = "Token ${localProps.getProperty("MAPBOX_DOWNLOADS_TOKEN", "")}"
+            }
+        }
     }
 }
 

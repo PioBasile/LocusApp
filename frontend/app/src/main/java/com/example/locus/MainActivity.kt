@@ -18,6 +18,7 @@ import com.example.locus.ui.screens.HomeScreen
 import com.example.locus.ui.screens.LoginScreen
 import com.example.locus.ui.screens.ProfileScreen
 import com.example.locus.ui.screens.PublicProfileScreen
+import com.example.locus.ui.screens.MapScreen
 import com.example.locus.ui.screens.SignupScreen
 import com.example.locus.ui.theme.LocusTheme
 import com.example.locus.viewmodel.UserViewModel
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigate = { currentNav = it },
                                     token = uiState.token ?: ""
                                 )
-                                NavDestination.COMPASS -> HomeScreen(
+                                NavDestination.COMPASS -> MapScreen(
                                     onNavigate = { currentNav = it }
                                 )
                                 NavDestination.EXPLORE -> ExploreScreen(

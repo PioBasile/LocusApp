@@ -53,6 +53,7 @@ fun HomeScreen(
         viewModel.loadPostsForGroup(token, currentGroup?.id ?: 0)
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -72,7 +73,7 @@ fun HomeScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(scrollState)
-                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when {
@@ -190,11 +191,14 @@ fun HomeScreen(
             }
         }
 
-        BottomNav(
-            selected = NavDestination.HOME,
-            onSelect = onNavigate
-        )
     }
+
+    BottomNav(
+        selected = NavDestination.HOME,
+        onSelect = onNavigate,
+        modifier = Modifier.align(Alignment.BottomCenter)
+    )
+    } // end outer Box
 
     selectedPostIdForComments?.let { postId ->
         CommentBottomSheet(

@@ -84,6 +84,7 @@ fun AddPostScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().background(OffWhite)) {
         Topbar()
 
@@ -341,8 +342,10 @@ fun AddPostScreen(
             }
         }
 
-        BottomNav(selected = NavDestination.ADD, onSelect = onNavigate)
     }
+
+    BottomNav(selected = NavDestination.ADD, onSelect = onNavigate, modifier = Modifier.align(Alignment.BottomCenter))
+    } // end outer Box
 }
 
 @Composable
