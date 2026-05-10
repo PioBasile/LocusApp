@@ -25,6 +25,7 @@ func setupRoutes() {
 	http.HandleFunc("/getLikes", handlers.GetLikesHandler)
 	http.HandleFunc("/getMostFollowedUsers", handlers.GetTopMostFollowedUsers)
 	http.HandleFunc("/getAllUserPosts", handlers.GetPostPerUserHandler)
+	http.HandleFunc("/searchPosts", handlers.SearchPostsHandler)
 
 	// Protected routes
 	http.HandleFunc("/makepost", handlers.IsAuthorized(handlers.MakePostHandler))
@@ -45,6 +46,19 @@ func setupRoutes() {
 	http.HandleFunc("/updateFCMToken", handlers.IsAuthorized(handlers.UpdateFCMTokenHandler))
 	http.HandleFunc("/ChangeUsername", handlers.IsAuthorized(handlers.ChangeUsernameHandler))
 	http.HandleFunc("/getMyFollowers", handlers.IsAuthorized(handlers.GetMyFollowersHandler))
+
+	// TravelPath routes
+	http.HandleFunc("/travelPath/lieux/create", handlers.IsAuthorized(handlers.CreateLieuHandler))
+	http.HandleFunc("/travelPath/itineraires/save", handlers.IsAuthorized(handlers.SaveItineraireHandler))
+	http.HandleFunc("/travelPath/itineraires", handlers.IsAuthorized(handlers.GetMyItinerairesHandler))
+	http.HandleFunc("/travelPath/itineraires/like", handlers.IsAuthorized(handlers.LikeItineraireHandler))
+	http.HandleFunc("/travelPath/itineraires/unlike", handlers.IsAuthorized(handlers.UnlikeItineraireHandler))
+	http.HandleFunc("/travelPath/itineraires/search", handlers.IsAuthorized(handlers.SearchItinerairesHandler))
+	http.HandleFunc("/travelPath/lieux", handlers.GetLieuxHandler)
+	http.HandleFunc("/travelPath/lieu", handlers.GetLieuByIDHandler)
+	http.HandleFunc("/travelPath/lieux/posts", handlers.GetPostsByLieuHandler)
+	http.HandleFunc("/travelPath/itineraires/generate", handlers.GenerateItineraireHandler)
+
 	
 	
 	
