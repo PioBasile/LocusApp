@@ -1,9 +1,9 @@
 package lib
-
+ 
 import "github.com/lib/pq"
 import "time"
 import "encoding/json"
-
+ 
 // User represents a user in the system
 type User struct {
 	ID             int    `json:"id" db:"id"`
@@ -13,19 +13,19 @@ type User struct {
 	ProfilePicture string `json:"ppurl" db:"ppurl"`
 	FCMToken       string `json:"fcm_token" db:"fcm_token"`
 }
-
+ 
 // LoginRequest represents the login request payload
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Username string `json:"username"`
 }
-
+ 
 // LoginResponse represents the login response with JWT token
 type LoginResponse struct {
 	Token string `json:"token"`
 }
-
+ 
 // PostResponse represents a post in responses
 type PostResponse struct {
 	ID          int            `db:"id_pub" json:"id"`
@@ -44,7 +44,7 @@ type Location struct {
 	Nom string      `json:"nom" db:"nom"`
 	GPS [2]float64  `json:"gps" db:"gps"`
 }
-
+ 
 // PublicUserInfo represents public user profile information
 type PublicUserInfo struct {
 	ID             int    `json:"id" db:"id"`
@@ -52,7 +52,7 @@ type PublicUserInfo struct {
 	ProfilePicture string `json:"ppurl" db:"ppurl"`
 	Posts 		   []PostResponse `json:"posts,omitempty"`
 }
-
+ 
 // Group represents a user group
 type Group struct {
 	ID          int    `json:"id" db:"id_groupe"`
@@ -60,23 +60,23 @@ type Group struct {
 	Description string `json:"description" db:"description"`
 	imageURL    string `json:"image_url" db:"url_image"`
 }
-
-
+ 
+ 
 type Post_for_algo struct {
     ID      int     `db:"id_pub"`   
     GPS     string  `db:"gps"`     
 	DistanceFromUser float64 
 }
-
+ 
 type FollowerInfo struct {
 	ID       int    `json:"id" db:"id"`
 	Username string `json:"username" db:"username"`
 	PPURL    string `json:"ppurl" db:"ppurl"`
 }
-
-
-
-
+ 
+ 
+ 
+ 
 type Lieu struct {
 	ID          int     `db:"id_lieu" json:"id"`
 	Nom         string  `db:"nom" json:"nom"`
@@ -96,7 +96,7 @@ type Lieu struct {
 	Distance  float64       `db:"-" json:"distance_km,omitempty"`
 	Photos    []LieuPhoto   `db:"-" json:"photos,omitempty"`
 }
-
+ 
 // LieuPhoto représente une photo additionnelle d'un lieu
 type LieuPhoto struct {
 	ID      int    `db:"id_photo" json:"id"`
@@ -105,7 +105,7 @@ type LieuPhoto struct {
 	Legende string `db:"legende" json:"legende"`
 	Ordre   int    `db:"ordre" json:"ordre"`
 }
-
+ 
 // LieuAvis représente un avis utilisateur sur un lieu
 type LieuAvis struct {
 	ID          int       `db:"id_avis" json:"id"`
@@ -116,7 +116,13 @@ type LieuAvis struct {
 	Commentaire string    `db:"commentaire" json:"commentaire"`
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
-
+ 
+// LieuAvisCreateRequest requête de soumission d'un avis sur un lieu
+type LieuAvisCreateRequest struct {
+	Note        int    `json:"note"`        // 1..5
+	Commentaire string `json:"commentaire"`
+}
+ 
 // ItineraireEtape représente une étape dans un itinéraire
 type ItineraireEtape struct {
 	Ordre           int     `json:"ordre"`
@@ -134,7 +140,7 @@ type ItineraireEtape struct {
 	URLImage        string  `json:"url_image"`
 	Note            float64 `json:"note"`
 }
-
+ 
 // Itineraire représente un itinéraire complet généré
 type Itineraire struct {
 	ID           int               `json:"id"`
@@ -147,7 +153,7 @@ type Itineraire struct {
 	MeteoSensible bool             `json:"meteo_sensible"`
 	Resume       string            `json:"resume"`
 }
-
+ 
 // ItineraireRequest représente une requête de génération d'itinéraire
 type ItineraireRequest struct {
 	GPS           string   `json:"gps"`               // coordonnées GPS de l'utilisateur
@@ -158,7 +164,7 @@ type ItineraireRequest struct {
 	ToutTemps     bool     `json:"tout_temps"`
 	LieuxFavoris  []string `json:"lieux_favoris"`
 }
-
+ 
 // LieuCreateRequest requête de création d'un lieu
 type LieuCreateRequest struct {
 	Nom         string  `json:"nom"`
@@ -172,7 +178,7 @@ type LieuCreateRequest struct {
 	SiteWeb     string  `json:"site_web"`
 	Telephone   string  `json:"telephone"`
 }
-
+ 
 // SearchPostsRequest requête de recherche de posts
 type SearchPostsRequest struct {
 	Query      string   `json:"q"`
@@ -185,19 +191,19 @@ type SearchPostsRequest struct {
 	Limit      int      `json:"limit"`
 	Offset     int      `json:"offset"`
 }
-
+ 
 type ItineraireLike struct {
 	ID           int `db:"id_like" json:"id"`
 	UserID       int `db:"usr_id" json:"user_id"`
 	ItineraireID int `db:"id_itin" json:"itin_id"`
 }
-
+ 
 // ItineraireSearchRequest pour filtrer par types de lieux
 type ItineraireSearchRequest struct {
 	Categories []string `json:"categories"` // ex: ["restaurant", "bar", "parc"]
 	Query      string   `json:"q"`          // recherche textuelle
 }
-
+ 
 type SavedItin struct {
     ID        int             `json:"id"`
     Nom       string          `json:"nom"`

@@ -488,8 +488,13 @@ func GetMyItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(UserIDKey).(int)
 
 	rows, err := db.Query(`
-		SELECT id_itin, nom, type, budget, duree_min, effort, donnees, created_at
-		FROM Itineraires WHERE usr_id = $1 ORDER BY created_at DESC`, userID)
+		SELECT i.id_itin, i.nom, i.type, i.budget, i.duree_min, i.effort, i.donnees, i.created_at,
+		       COALESCE(COUNT(l.id_like), 0) AS likes_count
+		FROM Itineraires i
+		LEFT JOIN ItinerairesLikes l ON l.id_itin = i.id_itin
+		WHERE i.usr_id = $1
+		GROUP BY i.id_itin
+		ORDER BY i.created_at DESC`, userID)
 	if err != nil {
 		http.Error(w, "Erreur serveur", http.StatusInternalServerError)
 		return
@@ -497,21 +502,22 @@ func GetMyItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type SavedItin struct {
-		ID        int             `json:"id"`
-		Nom       string          `json:"nom"`
-		Type      string          `json:"type"`
-		Budget    int             `json:"budget"`
-		DureeMin  int             `json:"duree_minutes"`
-		Effort    int             `json:"effort_score"`
-		Donnees   json.RawMessage `json:"itineraire"`
-		CreatedAt time.Time       `json:"created_at"`
+		ID         int             `json:"id"`
+		Nom        string          `json:"nom"`
+		Type       string          `json:"type"`
+		Budget     int             `json:"budget"`
+		DureeMin   int             `json:"duree_minutes"`
+		Effort     int             `json:"effort_score"`
+		Donnees    json.RawMessage `json:"itineraire"`
+		CreatedAt  time.Time       `json:"created_at"`
+		LikesCount int             `json:"likes_count"`
 	}
 
 	var itins []SavedItin
 	for rows.Next() {
 		var it SavedItin
 		var donneesStr string
-		if err := rows.Scan(&it.ID, &it.Nom, &it.Type, &it.Budget, &it.DureeMin, &it.Effort, &donneesStr, &it.CreatedAt); err != nil {
+		if err := rows.Scan(&it.ID, &it.Nom, &it.Type, &it.Budget, &it.DureeMin, &it.Effort, &donneesStr, &it.CreatedAt, &it.LikesCount); err != nil {
 			continue
 		}
 		it.Donnees = json.RawMessage(donneesStr)
@@ -594,9 +600,12 @@ func buildItineraire(candidates []lib.Lieu, req lib.ItineraireRequest, typeItin 
 		preferNote = true
 	}
 
-	// Sélection des lieux
-	creneaux := []string{"matin", "apres-midi", "soir"}
-	selected := selectLieux(candidates, maxEtapes, prixMax, preferNote, budgetMax, seed)
+	// Plan des créneaux selon le nombre d'étapes (matin → après-midi → soir, puis on boucle)
+	creneauxPlan := buildCreneauxPlan(maxEtapes)
+
+	// Sélection des lieux (créneau-aware + favoris obligatoires).
+	// On récupère aussi les créneaux effectivement retenus, certains pouvant être vides.
+	selected, creneauxRetenus := selectLieux(candidates, creneauxPlan, prixMax, preferNote, budgetMax, seed, req.LieuxFavoris)
 
 	// Construction des étapes
 	var etapes []lib.ItineraireEtape
@@ -610,7 +619,7 @@ func buildItineraire(candidates []lib.Lieu, req lib.ItineraireRequest, typeItin 
 		if distPrev > 1 { tempsTraj = int(distPrev / 30.0 * 60) } // ~30 km/h en transport
 
 		dureeVisite := getDureeVisite(l.Categorie)
-		creneau := creneaux[i%len(creneaux)]
+		creneau := creneauxRetenus[i]
 
 		imgURL := ""
 		if l.URLImage != nil { imgURL = *l.URLImage }
@@ -665,51 +674,349 @@ func buildItineraire(candidates []lib.Lieu, req lib.ItineraireRequest, typeItin 
 	}
 }
 
-// Sélectionne les meilleurs lieux selon les critères
-func selectLieux(candidates []lib.Lieu, n, prixMax int, preferNote bool, budgetMax, seed int) []lib.Lieu {
-	seen := map[int]bool{}
-	var result []lib.Lieu
-	budgetUsed := 0
+// buildCreneauxPlan construit la séquence de créneaux pour n étapes.
+// Heuristique : on commence le matin, puis après-midi, puis soir, en cyclant si besoin.
+func buildCreneauxPlan(n int) []string {
+	base := []string{"matin", "apres-midi", "soir"}
+	out := make([]string, n)
+	for i := 0; i < n; i++ {
+		out[i] = base[i%len(base)]
+	}
+	return out
+}
 
-	// Passe 1 : inclure les lieux des favoris (lieux_favoris ignorés ici, intégration future)
-	// Passe 2 : compléter par les meilleurs candidats
-	// On mélange légèrement selon le seed pour varier les itinéraires
-	offset := seed * 3
+// selectLieux sélectionne un lieu par créneau, en respectant les favoris obligatoires
+// et en filtrant sur les horaires d'ouverture du lieu pour le créneau visé.
+//
+// Retourne deux slices parallèles : les lieux retenus et les créneaux effectivement
+// assignés (utile car certains créneaux peuvent rester vides et être omis).
+//
+// Stratégie :
+//  1. Passe favoris : pour chaque ID dans lieuxFavoris, on place le lieu sur le 1er créneau
+//     compatible (horaires + non-doublon) — même s'il dépasse prixMax (mandatory).
+//     Le budget total reste contraint par budgetMax (on saute un favori qui le fait exploser).
+//  2. Passe principale : pour chaque créneau non rempli, on prend le meilleur candidat
+//     compatible (horaires, budget, prix max, éviter deux restos consécutifs).
+//  3. Passe de secours : si un créneau reste vide, on relâche la contrainte horaires.
+func selectLieux(candidates []lib.Lieu, creneaux []string, prixMax int, preferNote bool,
+	budgetMax, seed int, lieuxFavoris []string) ([]lib.Lieu, []string) {
 
-	for _, l := range candidates {
-		if len(result) >= n { break }
-		idx := (candidates[0].ID + offset) % len(candidates) // décalage par type
-		_ = idx
-
-		if seen[l.ID] { continue }
-		if l.PrixMoyen > prixMax { continue }
-		if budgetUsed+l.PrixMoyen > budgetMax { continue }
-
-		// Éviter de mettre 2 restaurants consécutifs
-		if len(result) > 0 && result[len(result)-1].Categorie == l.Categorie &&
-			l.Categorie == "restaurant" { continue }
-
-		seen[l.ID] = true
-		result = append(result, l)
-		budgetUsed += l.PrixMoyen
+	n := len(creneaux)
+	if n == 0 {
+		return nil, nil
 	}
 
-	// Si pas assez, assouplir le budget
-	if len(result) < n/2 {
-		for _, l := range candidates {
-			if len(result) >= n { break }
-			if seen[l.ID] { continue }
-			seen[l.ID] = true
-			result = append(result, l)
+	// Index rapide des candidats par ID
+	byID := make(map[int]lib.Lieu, len(candidates))
+	for _, l := range candidates {
+		byID[l.ID] = l
+	}
+
+	// IDs favoris (parse string → int, on ignore silencieusement les valeurs invalides)
+	favIDs := make([]int, 0, len(lieuxFavoris))
+	for _, s := range lieuxFavoris {
+		if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+			favIDs = append(favIDs, id)
 		}
 	}
 
-	// Décaler selon le seed pour varier (économique prend les premiers, confort saute des lieux)
-	if seed > 0 && len(result) > seed {
-		result = append(result[seed:], result[:seed]...)
+	result := make([]lib.Lieu, n)
+	filled := make([]bool, n)
+	seen := map[int]bool{}
+	budgetUsed := 0
+
+	// Passe 1 : favoris obligatoires
+	for _, id := range favIDs {
+		l, ok := byID[id]
+		if !ok || seen[id] {
+			continue
+		}
+		// Trouver le 1er créneau compatible non rempli
+		placed := false
+		for i := 0; i < n; i++ {
+			if filled[i] {
+				continue
+			}
+			if !lieuOuvertCreneau(strOrEmpty(l.Horaires), creneaux[i]) {
+				continue
+			}
+			if budgetUsed+l.PrixMoyen > budgetMax {
+				continue
+			}
+			result[i] = l
+			filled[i] = true
+			seen[id] = true
+			budgetUsed += l.PrixMoyen
+			placed = true
+			break
+		}
+		// Si rien de compatible côté horaires, on tente sans contrainte horaires
+		// (le favori est mandatory)
+		if !placed {
+			for i := 0; i < n; i++ {
+				if filled[i] {
+					continue
+				}
+				if budgetUsed+l.PrixMoyen > budgetMax {
+					continue
+				}
+				result[i] = l
+				filled[i] = true
+				seen[id] = true
+				budgetUsed += l.PrixMoyen
+				break
+			}
+		}
 	}
 
-	return result
+	// Passe 2 : compléter les créneaux vides avec les meilleurs candidats compatibles
+	// Décalage selon le seed pour différencier les 3 itinéraires
+	offset := seed * 3
+	if len(candidates) == 0 {
+		return compactLieuxAndCreneaux(result, filled, creneaux)
+	}
+
+	tryFill := func(strict bool) {
+		for i := 0; i < n; i++ {
+			if filled[i] {
+				continue
+			}
+			creneau := creneaux[i]
+			for k := 0; k < len(candidates); k++ {
+				l := candidates[(k+offset)%len(candidates)]
+				if seen[l.ID] {
+					continue
+				}
+				if l.PrixMoyen > prixMax {
+					continue
+				}
+				if budgetUsed+l.PrixMoyen > budgetMax {
+					continue
+				}
+				// Éviter deux restaurants consécutifs
+				if i > 0 && filled[i-1] && result[i-1].Categorie == "restaurant" && l.Categorie == "restaurant" {
+					continue
+				}
+				if strict && !lieuOuvertCreneau(strOrEmpty(l.Horaires), creneau) {
+					continue
+				}
+				result[i] = l
+				filled[i] = true
+				seen[l.ID] = true
+				budgetUsed += l.PrixMoyen
+				break
+			}
+		}
+	}
+
+	tryFill(true)  // d'abord avec filtre horaires
+	tryFill(false) // assouplissement si certains créneaux restent vides
+
+	outLieux, outCreneaux := compactLieuxAndCreneaux(result, filled, creneaux)
+
+	// preferNote : tri secondaire par note décroissante des lieux non-favoris.
+	// On garde les favoris à leur place pour ne pas casser leur attribution de créneau.
+	if preferNote && len(outLieux) > 1 {
+		favSet := map[int]bool{}
+		for _, id := range favIDs {
+			favSet[id] = true
+		}
+		// Tri par insertion adjacent — note décroissante, sans déplacer les favoris.
+		// Les créneaux sont déplacés en parallèle pour rester cohérents.
+		for i := 1; i < len(outLieux); i++ {
+			for j := i; j > 0; j-- {
+				if favSet[outLieux[j].ID] || favSet[outLieux[j-1].ID] {
+					break
+				}
+				if outLieux[j].Note > outLieux[j-1].Note {
+					outLieux[j], outLieux[j-1] = outLieux[j-1], outLieux[j]
+					outCreneaux[j], outCreneaux[j-1] = outCreneaux[j-1], outCreneaux[j]
+				} else {
+					break
+				}
+			}
+		}
+	}
+
+	return outLieux, outCreneaux
+}
+
+func compactLieuxAndCreneaux(arr []lib.Lieu, filled []bool, creneaux []string) ([]lib.Lieu, []string) {
+	outL := make([]lib.Lieu, 0, len(arr))
+	outC := make([]string, 0, len(arr))
+	for i, l := range arr {
+		if filled[i] {
+			outL = append(outL, l)
+			outC = append(outC, creneaux[i])
+		}
+	}
+	return outL, outC
+}
+
+func strOrEmpty(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parsing des horaires : décide si un lieu est ouvert pendant un créneau donné.
+//
+// Le champ `horaires` est du texte libre, ex :
+//   "Lun-Sam 12h-14h / 19h-22h"
+//   "Tous les jours 18h-minuit"
+//   "Accès libre 24h/24"
+//   "Selon programmation"
+//
+// On extrait toutes les plages "Xh-Yh" / "XhMM-YhMM" et on vérifie l'intersection
+// avec la fenêtre du créneau. Si on ne trouve aucune plage parsable, on considère
+// le lieu comme ouvert (cas "accès libre", "selon programmation", etc.).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// creneauWindow retourne (heureDébut, heureFin) en heures décimales pour un créneau.
+func creneauWindow(creneau string) (float64, float64) {
+	switch creneau {
+	case "matin":
+		return 8, 12
+	case "apres-midi", "après-midi":
+		return 12, 18
+	case "soir":
+		return 18, 23
+	default:
+		return 0, 24
+	}
+}
+
+// parseHoraireRanges extrait les plages horaires d'un texte libre français.
+// Retourne une liste de paires (début, fin) en heures décimales (ex: 19.5 = 19h30).
+func parseHoraireRanges(s string) [][2]float64 {
+	if s == "" {
+		return nil
+	}
+	low := strings.ToLower(s)
+
+	// Cas spéciaux : ouvert tout le temps / inconnu → ouvert toute la journée
+	openAllDay := []string{"24h/24", "24/24", "accès libre", "acces libre", "selon programmation", "selon evenement", "selon événement"}
+	for _, kw := range openAllDay {
+		if strings.Contains(low, kw) {
+			return [][2]float64{{0, 24}}
+		}
+	}
+
+	// "minuit" → 24h pour le calcul d'intersection
+	low = strings.ReplaceAll(low, "minuit", "24h")
+
+	var ranges [][2]float64
+	// Découpe sur séparateurs courants entre plages
+	for _, part := range strings.FieldsFunc(low, func(r rune) bool {
+		return r == '/' || r == ',' || r == ';'
+	}) {
+		// Cherche un motif "Xh[MM]-Yh[MM]" dans la partie
+		if r := extractRange(part); r != nil {
+			ranges = append(ranges, *r)
+		}
+	}
+	return ranges
+}
+
+// extractRange cherche la 1ère occurrence d'une plage "Xh[MM]-Yh[MM]" dans une portion de texte.
+func extractRange(s string) *[2]float64 {
+	// On scanne caractère par caractère, en cherchant "<digits>h<digits?>-<digits>h<digits?>"
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		// début : digit
+		if !isDigit(runes[i]) {
+			i++
+			continue
+		}
+		// Tentative de match
+		start, ok1, next := readTimeToken(runes, i)
+		if !ok1 {
+			i++
+			continue
+		}
+		// skip séparateurs "-", "à", "to", "-"
+		j := next
+		for j < len(runes) && (runes[j] == ' ' || runes[j] == '-' || runes[j] == '\u00e0' /* à */) {
+			j++
+		}
+		// chercher "a " optionnel
+		if j+1 < len(runes) && runes[j] == 'a' && runes[j+1] == ' ' {
+			j += 2
+		}
+		if j >= len(runes) || !isDigit(runes[j]) {
+			i = next
+			continue
+		}
+		end, ok2, after := readTimeToken(runes, j)
+		if !ok2 {
+			i = next
+			continue
+		}
+		// Plage valide
+		if end < start {
+			// ex : 22h-2h (overnight) → on coupe à 24h pour simplifier
+			end = 24
+		}
+		_ = after
+		return &[2]float64{start, end}
+	}
+	return nil
+}
+
+// readTimeToken lit un token type "12h" ou "12h30" depuis runes[i:], retourne (heure, ok, nextIdx).
+func readTimeToken(runes []rune, i int) (float64, bool, int) {
+	start := i
+	for i < len(runes) && isDigit(runes[i]) {
+		i++
+	}
+	if i == start {
+		return 0, false, start
+	}
+	hStr := string(runes[start:i])
+	h, err := strconv.Atoi(hStr)
+	if err != nil || h < 0 || h > 30 {
+		return 0, false, start
+	}
+	// 'h' requis
+	if i >= len(runes) || (runes[i] != 'h' && runes[i] != 'H') {
+		return 0, false, start
+	}
+	i++
+	// minutes optionnelles
+	mStart := i
+	for i < len(runes) && isDigit(runes[i]) && i-mStart < 2 {
+		i++
+	}
+	mins := 0
+	if i > mStart {
+		mins, _ = strconv.Atoi(string(runes[mStart:i]))
+	}
+	return float64(h) + float64(mins)/60.0, true, i
+}
+
+func isDigit(r rune) bool { return r >= '0' && r <= '9' }
+
+// lieuOuvertCreneau retourne true si le lieu est ouvert (au moins partiellement)
+// pendant la fenêtre du créneau demandé. Pas d'info exploitable → true (permissif).
+func lieuOuvertCreneau(horaires, creneau string) bool {
+	if strings.TrimSpace(horaires) == "" {
+		return true
+	}
+	ranges := parseHoraireRanges(horaires)
+	if len(ranges) == 0 {
+		return true
+	}
+	cStart, cEnd := creneauWindow(creneau)
+	for _, r := range ranges {
+		// intersection non vide : r[0] < cEnd ET r[1] > cStart
+		if r[0] < cEnd && r[1] > cStart {
+			return true
+		}
+	}
+	return false
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -815,9 +1122,11 @@ func SearchItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Construction de la requête SQL
 	// Nous utilisons ILIKE sur la colonne 'donnees' qui contient le JSON complet de l'itinéraire
-	sqlQ := `SELECT id_itin, nom, type, budget, duree_min, effort, donnees, created_at 
-	         FROM Itineraires 
-	         WHERE usr_id = $1`
+	sqlQ := `SELECT i.id_itin, i.nom, i.type, i.budget, i.duree_min, i.effort, i.donnees, i.created_at,
+	                COALESCE(COUNT(l.id_like), 0) AS likes_count
+	         FROM Itineraires i
+	         LEFT JOIN ItinerairesLikes l ON l.id_itin = i.id_itin
+	         WHERE i.usr_id = $1`
 	
 	args := []interface{}{userID}
 	argIdx := 2
@@ -826,7 +1135,7 @@ func SearchItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 	if catsStr != "" {
 		cats := strings.Split(catsStr, ",")
 		for _, cat := range cats {
-			sqlQ += fmt.Sprintf(" AND donnees::text ILIKE $%d", argIdx)
+			sqlQ += fmt.Sprintf(" AND i.donnees::text ILIKE $%d", argIdx)
 			args = append(args, "%"+strings.TrimSpace(cat)+"%")
 			argIdx++
 		}
@@ -834,12 +1143,12 @@ func SearchItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Filtrage par nom d'itinéraire ou description de lieu
 	if queryParam != "" {
-		sqlQ += fmt.Sprintf(" AND (nom ILIKE $%d OR donnees::text ILIKE $%d)", argIdx, argIdx)
+		sqlQ += fmt.Sprintf(" AND (i.nom ILIKE $%d OR i.donnees::text ILIKE $%d)", argIdx, argIdx)
 		args = append(args, "%"+queryParam+"%")
 		argIdx++
 	}
 
-	sqlQ += " ORDER BY created_at DESC"
+	sqlQ += " GROUP BY i.id_itin ORDER BY i.created_at DESC"
 
 	rows, err := db.Query(sqlQ, args...)
 	if err != nil {
@@ -849,21 +1158,22 @@ func SearchItinerairesHandler(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type SavedItin struct {
-		ID        int             `json:"id"`
-		Nom       string          `json:"nom"`
-		Type      string          `json:"type"`
-		Budget    int             `json:"budget"`
-		DureeMin  int             `json:"duree_minutes"`
-		Effort    int             `json:"effort_score"`
-		Donnees   json.RawMessage `json:"itineraire"`
-		CreatedAt time.Time       `json:"created_at"`
+		ID         int             `json:"id"`
+		Nom        string          `json:"nom"`
+		Type       string          `json:"type"`
+		Budget     int             `json:"budget"`
+		DureeMin   int             `json:"duree_minutes"`
+		Effort     int             `json:"effort_score"`
+		Donnees    json.RawMessage `json:"itineraire"`
+		CreatedAt  time.Time       `json:"created_at"`
+		LikesCount int             `json:"likes_count"`
 	}
 
 	var itins []SavedItin
 	for rows.Next() {
 		var it SavedItin
 		var donneesStr string
-		if err := rows.Scan(&it.ID, &it.Nom, &it.Type, &it.Budget, &it.DureeMin, &it.Effort, &donneesStr, &it.CreatedAt); err != nil {
+		if err := rows.Scan(&it.ID, &it.Nom, &it.Type, &it.Budget, &it.DureeMin, &it.Effort, &donneesStr, &it.CreatedAt, &it.LikesCount); err != nil {
 			continue
 		}
 		it.Donnees = json.RawMessage(donneesStr)
