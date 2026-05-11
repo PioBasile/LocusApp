@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import java.io.File
 
 data class ProfileUiState(
@@ -28,6 +29,7 @@ data class ProfileUiState(
     val userPosts: List<PostResponse> = emptyList(),
     val userGroupDetails: List<MyGroupResponse> = emptyList(),
     val groupCount: Int = 0,
+    val likeCounts: Map<Int, Int> = emptyMap(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null
@@ -57,45 +59,53 @@ class ProfileViewModel(
                 )
             }
             try {
-                val profileDeferred = async { repository.getProfile(token) }
-                val followersDeferred = async { repository.getFollowers(token) }
-                val followingDeferred = async { repository.getMyFollowing(token) }
-                val groupIdsDeferred = async { groupRepository.getMyGroups(token) }
+                supervisorScope {
+                    val profileDeferred = async { repository.getProfile(token) }
+                    val followersDeferred = async { repository.getFollowers(token) }
+                    val followingDeferred = async { repository.getMyFollowing(token) }
+                    val groupIdsDeferred = async { groupRepository.getMyGroups(token) }
 
-                val profile = profileDeferred.await()
-                val followers = followersDeferred.await()
-                val following = followingDeferred.await()
-                val groupIds = groupIdsDeferred.await()
+                    val profile = profileDeferred.await()
+                    val followers = followersDeferred.await()
+                    val following = followingDeferred.await()
+                    val groupIds = groupIdsDeferred.await()
 
-                val allGroupIds = (groupIds + 0).distinct()
-                val allPosts = allGroupIds
-                    .map { groupId -> async { postRepository.getPostsByGroup(token, groupId) } }
-                    .awaitAll()
-                    .flatten()
+                    val allGroupIds = (groupIds + 0).distinct()
+                    val allPosts = allGroupIds
+                        .map { groupId -> async { postRepository.getPostsByGroup(token, groupId) } }
+                        .awaitAll()
+                        .flatten()
 
-                val userPosts = allPosts
-                    .distinctBy { it.id }
-                    .filter { it.user_id == profile.id }
+                    val userPosts = allPosts
+                        .distinctBy { it.id }
+                        .filter { it.user_id == profile.id }
 
-                val namedGroups = mutableListOf(
-                    MyGroupResponse(id = 0, name = "Public", isPrivate = false, description = null, imageUrl = null)
-                )
-                groupIds
-                    .map { id -> async { groupRepository.getGroupDetails(id)?.let { MyGroupResponse(id = id, name = it.name, isPrivate = false, description = null, imageUrl = it.imageUrl) } } }
-                    .awaitAll()
-                    .filterNotNull()
-                    .let { namedGroups.addAll(it) }
-
-                _uiState.update {
-                    it.copy(
-                        profile = profile,
-                        followers = followers,
-                        following = following,
-                        groupCount = groupIds.size,
-                        userPosts = userPosts,
-                        userGroupDetails = namedGroups,
-                        isLoading = false
+                    val namedGroups = mutableListOf(
+                        MyGroupResponse(id = 0, name = "Public", isPrivate = false, description = null, imageUrl = null)
                     )
+                    groupIds
+                        .map { id -> async { groupRepository.getGroupDetails(id)?.let { MyGroupResponse(id = id, name = it.name, isPrivate = false, description = null, imageUrl = it.imageUrl) } } }
+                        .awaitAll()
+                        .filterNotNull()
+                        .let { namedGroups.addAll(it) }
+
+                    val likeCountsMap = userPosts
+                        .map { post -> async { post.id to postRepository.getLikesForPost(token, post.id) } }
+                        .awaitAll()
+                        .toMap()
+
+                    _uiState.update {
+                        it.copy(
+                            profile = profile,
+                            followers = followers,
+                            following = following,
+                            groupCount = groupIds.size,
+                            userPosts = userPosts,
+                            userGroupDetails = namedGroups,
+                            likeCounts = likeCountsMap,
+                            isLoading = false
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {

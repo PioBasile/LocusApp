@@ -6,7 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +55,7 @@ enum class ProfileTab { PHOTOS, PINS }
 fun ProfileScreen(
     onNavigate: (NavDestination) -> Unit = {},
     onLogout: () -> Unit = {},
+    onPostClick: (Int) -> Unit = {},
     viewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.ProfileViewModelFactory.Factory),
     token: String = "",
     currentUserId: Int? = null
@@ -65,16 +68,21 @@ fun ProfileScreen(
     var showChangeUsernameDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
+    // Capture status bar height once at composition time — avoids async layout passes from statusBarsPadding()
+    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Must be outside any conditional to respect composition order rules
+    val chipScrollState = rememberScrollState()
+
     val postGroupIds = remember(uiState.userPosts) { uiState.userPosts.flatMap { it.groupe }.toSet() }
     val filterGroups = remember(uiState.userGroupDetails, postGroupIds) {
         uiState.userGroupDetails.filter { it.id == 0 || it.id in postGroupIds }
     }
 
-    val posts = remember(uiState.userPosts, selectedGroupFilter) {
+    val posts = remember(uiState.userPosts, selectedGroupFilter, uiState.likeCounts) {
         uiState.userPosts
             .filter { selectedGroupFilter == null || it.groupe.contains(selectedGroupFilter) }
             .sortedByDescending { it.date }
-            .map { p -> ProfilePost(id = p.id, imageUrl = p.imageUrl, likeCount = 0) }
+            .map { p -> ProfilePost(id = p.id, imageUrl = p.imageUrl, likeCount = uiState.likeCounts[p.id] ?: 0) }
     }
 
     LaunchedEffect(Unit) {
@@ -129,7 +137,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(colors = listOf(NavyDark, NavyMedium)))
-                    .statusBarsPadding()
+                    .padding(top = statusBarTopPadding)
                     .padding(horizontal = 20.dp)
                     .padding(top = 12.dp, bottom = 24.dp)
             ) {
@@ -264,7 +272,6 @@ fun ProfileScreen(
 
             // -- Group filter chips --------------------------------
             if (filterGroups.size > 1) {
-                val chipScrollState = rememberScrollState()
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(chipScrollState).padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -301,7 +308,7 @@ fun ProfileScreen(
                 ) {
                     posts.chunked(3).forEach { rowPosts ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowPosts.forEach { post -> PhotoGridItem(post = post, modifier = Modifier.weight(1f)) }
+                            rowPosts.forEach { post -> PhotoGridItem(post = post, modifier = Modifier.weight(1f), onClick = { onPostClick(post.id) }) }
                             repeat(3 - rowPosts.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
                     }
@@ -414,13 +421,14 @@ private fun GroupFilterChip(label: String, selected: Boolean, onClick: () -> Uni
 
 // -- Photo grid item -----------------------------------------------------------
 @Composable
-private fun PhotoGridItem(post: ProfilePost, modifier: Modifier = Modifier) {
+private fun PhotoGridItem(post: ProfilePost, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(10.dp))
             .border(2.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
             .background(LightGray)
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
     ) {
         AsyncImage(model = post.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Row(

@@ -147,8 +147,12 @@ func MakePostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Notification push
 	go NotifyGroupMembersPush(groupIDs, userID, description)
-	// IA — skip if caller opted out
-	if r.FormValue("ai_tags") != "false" {
+
+	// Save manual tags if provided; only run AI when no manual tags were sent
+	tagsRaw := r.MultipartForm.Value["tags"]
+	if len(tagsRaw) > 0 {
+		_, _ = db.Exec(`UPDATE Publications SET tags = $1 WHERE id_pub = $2`, pq.StringArray(tagsRaw), lastID)
+	} else if r.FormValue("ai_tags") != "false" {
 		go GenerateAndSaveTags(lastID, description, dstPath)
 	}
 
@@ -372,11 +376,10 @@ func ReportPostHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func LikeHandler(w http.ResponseWriter, r *http.Request) {
-	val := r.Context().Value(UserIDKey)
 	userID := -1
-	if val != nil {
-    	userID = val.(int)
-	} 
+	if token := r.Header.Get("Authorization"); token != "" {
+		userID = getUserIDFromToken(token)
+	}
 
 
 	post_id := r.URL.Query().Get("id")
@@ -385,19 +388,44 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `INSERT INTO Likes (id_user, id_pub) VALUES ($1, $2)`
+	query := `INSERT INTO Likes (id_user, id_pub) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM Likes WHERE id_user = $1 AND id_pub = $2)`
 	_, err := db.Exec(query, userID, post_id)
 	if err != nil {
 		http.Error(w, "Erreur lors de l'ajout du like", http.StatusInternalServerError)
 		return
 	}
 
+	capturedPostID := post_id
+	capturedLikerID := userID
+	go func() {
+		var authorID int
+		var authorFCM sql.NullString
+		var postDesc string
+		err := db.QueryRow(
+			`SELECT p.id_publicateur, u.fcm_token, p.description
+			 FROM Publications p
+			 JOIN Utilisateurs u ON u.usr_id = p.id_publicateur
+			 WHERE p.id_pub = $1`, capturedPostID,
+		).Scan(&authorID, &authorFCM, &postDesc)
+		if err != nil || !authorFCM.Valid || authorFCM.String == "" || authorID == capturedLikerID {
+			return
+		}
+		var likerUsername string
+		if err = db.QueryRow(`SELECT username FROM Utilisateurs WHERE usr_id = $1`, capturedLikerID).Scan(&likerUsername); err != nil {
+			return
+		}
+		NotifyLikePush(authorFCM.String, likerUsername, parseCaption(postDesc))
+	}()
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Like ajouté avec succès")
 }
 
 func UnlikeHandler(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(UserIDKey).(int)
+	userID := -1
+	if token := r.Header.Get("Authorization"); token != "" {
+		userID = getUserIDFromToken(token)
+	}
 	post_id := r.URL.Query().Get("id")
 	if post_id == "" {
 		http.Error(w, "ID du post manquant", http.StatusBadRequest)

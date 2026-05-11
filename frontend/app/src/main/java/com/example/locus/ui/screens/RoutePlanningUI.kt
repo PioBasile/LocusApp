@@ -28,7 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,7 +80,10 @@ private fun Int.toHourMin(): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoutePlanningFlow(viewModel: RoutePlanningViewModel) {
+fun RoutePlanningFlow(
+    viewModel: RoutePlanningViewModel,
+    onPostClick: (Int) -> Unit = {}
+) {
     when (viewModel.state) {
         PlanningState.IDLE -> Unit
         PlanningState.PLANNING -> PreferencesSheet(
@@ -88,6 +94,7 @@ fun RoutePlanningFlow(viewModel: RoutePlanningViewModel) {
         PlanningState.GENERATING -> GeneratingOverlay()
         PlanningState.OPTIONS -> RouteOptionsSheet(
             routes = viewModel.routes,
+            error = viewModel.error,
             likedIds = viewModel.likedIds,
             dislikedIds = viewModel.dislikedIds,
             onLike = { viewModel.like(it) },
@@ -102,9 +109,16 @@ fun RoutePlanningFlow(viewModel: RoutePlanningViewModel) {
                 isSaved = viewModel.isSaved,
                 onSave = { viewModel.toggleSave() },
                 onBack = { viewModel.backToOptions() },
-                onClose = { viewModel.close() }
+                onClose = { viewModel.close() },
+                onStepClick = { lieuId -> viewModel.selectPlace(lieuId) }
             )
         }
+        PlanningState.PLACE_DETAIL -> PlaceDetailScreen(
+            lieuId = viewModel.selectedLieuId,
+            onBack = { viewModel.backFromPlace() },
+            onPostClick = onPostClick,
+            onAddToFavorites = { name -> viewModel.addToFavorites(name) }
+        )
     }
 }
 
@@ -298,6 +312,7 @@ private fun GeneratingOverlay() {
 @Composable
 private fun RouteOptionsSheet(
     routes: List<RouteOption>,
+    error: String?,
     likedIds: Set<Int>,
     dislikedIds: Set<Int>,
     onLike: (Int) -> Unit,
@@ -323,17 +338,32 @@ private fun RouteOptionsSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(InputBorder).align(Alignment.CenterHorizontally))
-            Text("3 routes for you", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+            Text(
+                if (routes.isEmpty()) "No routes found" else "${routes.size} routes for you",
+                fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark
+            )
 
-            routes.forEach { route ->
-                RouteOptionCard(
-                    route = route,
-                    isLiked = route.id in likedIds,
-                    isDisliked = route.id in dislikedIds,
-                    onLike = { onLike(route.id) },
-                    onDislike = { onDislike(route.id) },
-                    onSelect = { onSelect(route) }
-                )
+            if (routes.isEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Filled.SearchOff, contentDescription = null, tint = InputHint, modifier = Modifier.size(48.dp))
+                        Text(
+                            error ?: "Not enough places near you.\nTry adjusting your preferences.",
+                            color = InputHint, fontSize = 13.sp, textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                routes.forEach { route ->
+                    RouteOptionCard(
+                        route = route,
+                        isLiked = route.id in likedIds,
+                        isDisliked = route.id in dislikedIds,
+                        onLike = { onLike(route.id) },
+                        onDislike = { onDislike(route.id) },
+                        onSelect = { onSelect(route) }
+                    )
+                }
             }
 
             OutlinedButton(
@@ -446,7 +476,8 @@ fun RouteDetailScreen(
     isSaved: Boolean,
     onSave: () -> Unit,
     onBack: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onStepClick: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val typeColor = route.type.color()
@@ -475,7 +506,13 @@ fun RouteDetailScreen(
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Your ${route.type.label.lowercase()} route", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+                Text(
+                    route.nom.ifEmpty { "Your ${route.type.label.lowercase()} route" },
+                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark
+                )
+                if (route.resume.isNotEmpty()) {
+                    Text(route.resume, color = InputHint, fontSize = 13.sp, lineHeight = 18.sp)
+                }
 
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MetricChip("${route.totalBudget}€", Icons.Filled.AttachMoney, Color(0xFF66BB6A))
@@ -509,7 +546,7 @@ fun RouteDetailScreen(
                 Text("Route steps", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NavyDark)
 
                 route.steps.forEachIndexed { index, step ->
-                    StepCard(step = step, number = index + 1)
+                    StepCard(step = step, number = index + 1, onStepClick = { onStepClick(step.lieuId) })
                 }
 
                 Spacer(Modifier.height(80.dp))
@@ -561,7 +598,8 @@ fun RouteDetailScreen(
 }
 
 @Composable
-private fun StepCard(step: RouteStep, number: Int) {
+private fun StepCard(step: RouteStep, number: Int, onStepClick: () -> Unit = {}) {
+    val context = LocalContext.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         Box(
             modifier = Modifier.size(32.dp).clip(CircleShape).background(step.category.color()),
@@ -574,7 +612,11 @@ private fun StepCard(step: RouteStep, number: Int) {
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = White),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onStepClick
+            )
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -589,18 +631,31 @@ private fun StepCard(step: RouteStep, number: Int) {
                     modifier = Modifier.fillMaxWidth().height(110.dp).clip(RoundedCornerShape(10.dp)).background(step.category.color().copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(step.category.icon(), contentDescription = null, tint = step.category.color().copy(alpha = 0.5f), modifier = Modifier.size(44.dp))
+                    if (step.imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(step.imageUrl).crossfade(true).build(),
+                            contentDescription = step.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(step.category.icon(), contentDescription = null, tint = step.category.color().copy(alpha = 0.5f), modifier = Modifier.size(44.dp))
+                    }
                 }
 
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     InfoChip(if (step.price > 0) "${step.price}€" else "Free", Icons.Filled.AttachMoney)
                     InfoChip("${step.durationMinutes} min", Icons.Filled.Schedule)
                     if (step.distanceFromPrev != "Start") InfoChip(step.distanceFromPrev, Icons.Filled.LocationOn)
+                    if (step.rating > 0f) InfoChip("%.1f ★".format(step.rating), Icons.Filled.Star)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Filled.Schedule, contentDescription = null, tint = InputHint, modifier = Modifier.size(11.dp))
                     Text(step.openingHours, color = InputHint, fontSize = 11.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("See details →", color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

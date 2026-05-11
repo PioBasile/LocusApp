@@ -34,7 +34,9 @@ import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.theme.NavyDark
 import com.example.locus.ui.theme.White
+import com.example.locus.utils.SessionManager
 import com.example.locus.viewmodel.RoutePlanningViewModel
+import com.google.android.gms.location.LocationServices
 import com.mapbox.geojson.Point
 import com.mapbox.maps.Style
 import com.mapbox.maps.dsl.cameraOptions
@@ -47,6 +49,7 @@ import com.mapbox.maps.plugin.locationcomponent.location
 @Composable
 fun MapScreen(
     onNavigate: (NavDestination) -> Unit = {},
+    onPostClick: (Int) -> Unit = {},
     planningVm: RoutePlanningViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -73,6 +76,19 @@ fun MapScreen(
                 )
             )
         }
+        // Inject auth token for itinerary save operations
+        planningVm.token = SessionManager(context).token ?: ""
+    }
+
+    // Update GPS in VM whenever location permission is granted
+    LaunchedEffect(locationGranted) {
+        if (locationGranted) {
+            LocationServices.getFusedLocationProviderClient(context)
+                .lastLocation
+                .addOnSuccessListener { loc ->
+                    loc?.let { planningVm.gps = "${it.latitude},${it.longitude}" }
+                }
+        }
     }
 
     val mapViewportState = rememberMapViewportState {
@@ -95,11 +111,13 @@ fun MapScreen(
             compass = {}
         ) {
             MapEffect(locationGranted) { mapView ->
-                mapView.location.updateSettings {
-                    enabled = locationGranted
-                    pulsingEnabled = locationGranted
+                    try {
+                        mapView.location.updateSettings {
+                            enabled = locationGranted
+                            pulsingEnabled = locationGranted
+                        }
+                    } catch (_: Exception) { }
                 }
-            }
         }
 
         // Search bar overlay — top of map
@@ -145,6 +163,6 @@ fun MapScreen(
         )
 
         // Route planning overlay (sheets + detail screen)
-        RoutePlanningFlow(viewModel = planningVm)
+        RoutePlanningFlow(viewModel = planningVm, onPostClick = onPostClick)
     }
 }

@@ -31,7 +31,8 @@ interface ApiService {
         @Part("description") description: RequestBody,
         @Part("groupe") groupes: @JvmSuppressWildcards List<RequestBody>,
         @Part("id_loc") idLoc: RequestBody,
-        @Part("ai_tags") aiTags: RequestBody
+        @Part("ai_tags") aiTags: RequestBody,
+        @Part("tags") tags: @JvmSuppressWildcards List<RequestBody> = emptyList()
     ): String
 
     @GET("/getPostsByGroup")
@@ -197,4 +198,74 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Body body: FCMTokenRequest
     )
+
+    // -- TravelPath / Places (public) ------------------------------
+    @GET("/travelPath/lieux")
+    suspend fun getLieux(
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null,
+        @Query("radius_km") radiusKm: Double? = null,
+        @Query("categorie") categorie: String? = null,
+        @Query("q") q: String? = null,
+        @Query("limit") limit: Int = 50
+    ): List<LieuResponse>
+
+    @GET("/travelPath/lieu")
+    suspend fun getLieu(@Query("id") id: Int): LieuResponse
+
+    @GET("/travelPath/lieux/posts")
+    suspend fun getLieuPosts(@Query("id") lieuId: Int): List<PostResponse>
+
+    // -- TravelPath / Places (protected) ---------------------------
+    @POST("/travelPath/lieux/create")
+    suspend fun createLieu(
+        @Header("Authorization") token: String,
+        @Body request: CreateLieuRequest
+    ): CreateLieuResponse
+
+    // -- TravelPath / Itineraries (public) -------------------------
+    @POST("/travelPath/itineraires/generate")
+    suspend fun generateItineraires(@Body request: ItineraireRequest): GenerateItinerairesResponse
+
+    // -- TravelPath / Itineraries (protected) ----------------------
+    @POST("/travelPath/itineraires/save")
+    suspend fun saveItineraire(
+        @Header("Authorization") token: String,
+        @Body itineraire: ItineraireResponse
+    ): SaveItineraireResponse
+
+    @GET("/travelPath/itineraires")
+    suspend fun getSavedItineraires(
+        @Header("Authorization") token: String
+    ): List<SavedItinResponse>
+
+    @POST("/travelPath/itineraires/like")
+    suspend fun likeItineraire(
+        @Header("Authorization") token: String,
+        @Query("id") id: Int
+    )
+
+    @DELETE("/travelPath/itineraires/unlike")
+    suspend fun unlikeItineraire(
+        @Header("Authorization") token: String,
+        @Query("id") id: Int
+    )
+
+    @GET("/travelPath/itineraires/search")
+    suspend fun searchItineraires(
+        @Header("Authorization") token: String,
+        @Query("categories") categories: String? = null,
+        @Query("q") q: String? = null
+    ): List<SavedItinResponse>
+
+    // -- Search posts (public) -------------------------------------
+    @GET("/searchPosts")
+    suspend fun searchPosts(
+        @Query("q") q: String? = null,
+        @Query("gps") gps: String? = null,
+        @Query("radius_km") radiusKm: Double? = null,
+        @Query("tags") tags: String? = null,
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): SearchPostsResponse
 }

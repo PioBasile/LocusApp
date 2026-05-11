@@ -16,6 +16,7 @@ import com.example.locus.ui.screens.AddPostScreen
 import com.example.locus.ui.screens.ExploreScreen
 import com.example.locus.ui.screens.HomeScreen
 import com.example.locus.ui.screens.LoginScreen
+import com.example.locus.ui.screens.PostDetailScreen
 import com.example.locus.ui.screens.ProfileScreen
 import com.example.locus.ui.screens.PublicProfileScreen
 import com.example.locus.ui.screens.MapScreen
@@ -36,10 +37,12 @@ class MainActivity : ComponentActivity() {
                 var currentNav by remember { mutableStateOf(NavDestination.HOME) }
                 var showSignup by remember { mutableStateOf(false) }
                 var viewingUserId by remember { mutableStateOf<Int?>(null) }
+                var viewingPostId by remember { mutableStateOf<Int?>(null) }
 
                 val onUserClick: (Int) -> Unit = { userId ->
                     if (userId != uiState.userId) viewingUserId = userId
                 }
+                val onPostClick: (Int) -> Unit = { postId -> viewingPostId = postId }
 
                 when {
                     !uiState.isSuccess && !showSignup -> LoginScreen(
@@ -57,16 +60,20 @@ class MainActivity : ComponentActivity() {
                         onBackToLogin = { showSignup = false }
                     )
                     else -> {
-                        // Public profile overlay
-                        if (viewingUserId != null) {
-                            PublicProfileScreen(
+                        when {
+                            viewingPostId != null -> PostDetailScreen(
+                                postId = viewingPostId!!,
+                                token = uiState.token ?: "",
+                                onBack = { viewingPostId = null }
+                            )
+                            viewingUserId != null -> PublicProfileScreen(
                                 userId = viewingUserId!!,
                                 token = uiState.token ?: "",
                                 currentUserId = uiState.userId,
-                                onBack = { viewingUserId = null }
+                                onBack = { viewingUserId = null },
+                                onPostClick = onPostClick
                             )
-                        } else {
-                            when (currentNav) {
+                            else -> when (currentNav) {
                                 NavDestination.HOME -> HomeScreen(
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
@@ -79,7 +86,8 @@ class MainActivity : ComponentActivity() {
                                     token = uiState.token ?: ""
                                 )
                                 NavDestination.COMPASS -> MapScreen(
-                                    onNavigate = { currentNav = it }
+                                    onNavigate = { currentNav = it },
+                                    onPostClick = onPostClick
                                 )
                                 NavDestination.EXPLORE -> ExploreScreen(
                                     token = uiState.token ?: "",
@@ -91,7 +99,8 @@ class MainActivity : ComponentActivity() {
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
                                     onNavigate = { currentNav = it },
-                                    onLogout = { viewModel.logout() }
+                                    onLogout = { viewModel.logout() },
+                                    onPostClick = onPostClick
                                 )
                             }
                         }

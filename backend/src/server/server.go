@@ -38,7 +38,7 @@ func setupRoutes() {
 	http.HandleFunc("/getFollowers", handlers.IsAuthorized(handlers.GetFollowers))
 	http.HandleFunc("/changePP", handlers.IsAuthorized(handlers.ChangePPHandler))
 	http.HandleFunc("/getUserGroups", handlers.IsAuthorized(handlers.GetUserGroupsHandler))
-	http.HandleFunc("/unlike", handlers.IsAuthorized(handlers.UnlikeHandler))
+	http.HandleFunc("/unlike", handlers.UnlikeHandler)
 	http.HandleFunc("/getAllUserLikes", handlers.IsAuthorized(handlers.GetAllUserLikesHandler))
 	http.HandleFunc("/reportPost", handlers.IsAuthorized(handlers.ReportPostHandler))
 	http.HandleFunc("/comment", handlers.IsAuthorized(handlers.CommentHandler))

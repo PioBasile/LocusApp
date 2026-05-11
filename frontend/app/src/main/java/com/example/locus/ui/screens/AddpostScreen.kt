@@ -7,13 +7,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,6 +67,14 @@ fun AddPostScreen(
     var showGroupDialog by remember { mutableStateOf(false) }
     var isPublic by remember { mutableStateOf(true) }
     var aiTagsEnabled by remember { mutableStateOf(false) }
+    var tagInput by remember { mutableStateOf("") }
+    var manualTags by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    fun addTag() {
+        val clean = tagInput.trim().lowercase().replace(" ", "_")
+        if (clean.isNotEmpty() && clean !in manualTags) manualTags = manualTags + clean
+        tagInput = ""
+    }
 
     val selectableGroups = myGroups
 
@@ -90,7 +107,7 @@ fun AddPostScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Column(modifier = Modifier.weight(1f).verticalScroll(scrollState)) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(scrollState).padding(bottom = 100.dp)) {
 
             // -- Photo hero ----------------------------------------
             Button(
@@ -181,34 +198,125 @@ fun AddPostScreen(
                     leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp)) }
                 )
 
-                // -- AI Tags toggle ---------------------------------------
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(White)
-                        .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(text = "AI Tags", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(text = "Automatically tag this post with AI", color = InputHint, fontSize = 12.sp)
-                    }
-                    Switch(
-                        checked = aiTagsEnabled,
-                        onCheckedChange = { aiTagsEnabled = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = White,
-                            checkedTrackColor = GoldPrimary,
-                            uncheckedThumbColor = InputHint,
-                            uncheckedTrackColor = Color.LightGray
+
+
+                // -- Manual tags ------------------------------------------
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "TAGS", color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+
+                    // -- AI Tags toggle ---------------------------------------
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(White)
+                            .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(text = "AI Tags", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(text = "Automatically tag this post with AI", color = InputHint, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = aiTagsEnabled,
+                            onCheckedChange = { aiTagsEnabled = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = White,
+                                checkedTrackColor = GoldPrimary,
+                                uncheckedThumbColor = InputHint,
+                                uncheckedTrackColor = Color.LightGray
+                            )
                         )
-                    )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(White)
+                            .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = tagInput,
+                            onValueChange = { tagInput = it },
+                            placeholder = { Text("Add a tag…", color = InputHint, fontSize = 14.sp, fontStyle = FontStyle.Italic) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { addTag() }),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = White,
+                                focusedContainerColor = White,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                cursorColor = NavyDark,
+                                unfocusedTextColor = NavyDark,
+                                focusedTextColor = NavyDark
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 6.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (tagInput.isNotBlank()) NavyDark else LightGray)
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) { addTag() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add tag", tint = if (tagInput.isNotBlank()) White else MediumGray, modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    if (manualTags.isNotEmpty()) {
+                        val tagScrollState = rememberScrollState()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(tagScrollState),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            manualTags.forEach { tag ->
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(NavyDark.copy(alpha = 0.08f))
+                                        .border(1.dp, NavyDark.copy(alpha = 0.18f), RoundedCornerShape(50.dp))
+                                        .padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(text = "#$tag", color = NavyDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(NavyDark.copy(alpha = 0.12f))
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }
+                                            ) { manualTags = manualTags - tag },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Filled.Close, contentDescription = "Remove", tint = NavyDark, modifier = Modifier.size(10.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // -- Visibility toggle ------------------------------------
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "Visibility", color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -233,6 +341,7 @@ fun AddPostScreen(
                             uncheckedTrackColor = Color.LightGray
                         )
                     )
+                }
                 }
 
                 // -- Group picker -----------------------------------------
@@ -311,10 +420,11 @@ fun AddPostScreen(
                             if (isPublic && !groupsListToPost.contains(0)) groupsListToPost.add(0)
 
                             val locPart = if (location.isNotBlank()) "\n---loc:$location" else ""
-                            val fullDescription = "$caption$locPart"
+                            val tagPart = if (manualTags.isNotEmpty()) "\n---tags:${manualTags.joinToString(",")}" else ""
+                            val fullDescription = "$caption$locPart$tagPart"
 
                             if (imageFile != null) {
-                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1, audioFile = recordedAudio, aiTags = aiTagsEnabled)
+                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1, audioFile = recordedAudio, aiTags = aiTagsEnabled, tags = manualTags)
                             } else {
                                 Toast.makeText(context, "Image error", Toast.LENGTH_SHORT).show()
                             }

@@ -27,6 +27,7 @@ enum class TimeSlot(val label: String) {
 
 data class RouteStep(
     val id: Int,
+    val lieuId: Int = 0,
     val name: String,
     val address: String,
     val category: ActivityCategory,
@@ -35,17 +36,21 @@ data class RouteStep(
     val durationMinutes: Int,
     val openingHours: String,
     val imageUrl: String = "",
-    val price: Int
+    val price: Int,
+    val rating: Float = 0f,
+    val gps: String = ""
 )
 
 data class RouteOption(
     val id: Int,
     val type: RouteType,
+    val nom: String = "",
     val steps: List<RouteStep>,
     val totalBudget: Int,
     val totalDurationMinutes: Int,
     val effortScore: Int,
-    val weatherSensitive: Boolean
+    val weatherSensitive: Boolean,
+    val resume: String = ""
 )
 
 data class RoutePlanPreferences(

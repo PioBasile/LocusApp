@@ -7,7 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.model.Group
 import com.example.locus.data.remote.FollowerResponse
+import com.example.locus.data.remote.LieuResponse
+import com.example.locus.data.remote.RetrofitClient
+import com.example.locus.data.remote.SearchPostResult
 import com.example.locus.data.repository.GroupRepository
+import com.example.locus.data.repository.TravelPathRepository
 import com.example.locus.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +31,8 @@ data class ExploreUiState(
 
 class ExploreViewModel(
     private val groupRepository: GroupRepository = GroupRepository(),
-    private val userRepository: UserRepository = UserRepository()
+    private val userRepository: UserRepository = UserRepository(),
+    private val travelPathRepository: TravelPathRepository = TravelPathRepository(RetrofitClient.api)
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ExploreUiState())
@@ -42,9 +47,22 @@ class ExploreViewModel(
     private val _myGroupIds = MutableStateFlow<Set<Int>>(emptySet())
     val myGroupIds: StateFlow<Set<Int>> = _myGroupIds.asStateFlow()
 
+    private val _places = MutableStateFlow<List<LieuResponse>>(emptyList())
+    val places: StateFlow<List<LieuResponse>> = _places.asStateFlow()
+
+    var isLoadingPlaces by mutableStateOf(false)
+        private set
+
+    private val _postSearchResults = MutableStateFlow<List<SearchPostResult>>(emptyList())
+    val postSearchResults: StateFlow<List<SearchPostResult>> = _postSearchResults.asStateFlow()
+
+    var isSearchingPosts by mutableStateOf(false)
+        private set
+
     init {
         loadGroups()
         loadTopUsers()
+        loadPlaces()
     }
 
     fun loadMyGroups(token: String) {
@@ -140,6 +158,29 @@ class ExploreViewModel(
                 _followedUserIds.value = _followedUserIds.value + targetUserId
                 android.util.Log.e("ExploreViewModel", "Unfollow failed: ${e.message}")
             }
+        }
+    }
+
+    fun loadPlaces(q: String? = null, categorie: String? = null, lat: Double? = null, lon: Double? = null) {
+        viewModelScope.launch {
+            isLoadingPlaces = true
+            travelPathRepository.getLieux(lat, lon, radiusKm = if (lat != null) 10.0 else null, categorie = categorie, q = q?.ifBlank { null }, limit = 20).fold(
+                onSuccess = { _places.value = it },
+                onFailure = {}
+            )
+            isLoadingPlaces = false
+        }
+    }
+
+    fun searchPosts(q: String) {
+        if (q.isBlank()) { _postSearchResults.value = emptyList(); return }
+        viewModelScope.launch {
+            isSearchingPosts = true
+            travelPathRepository.searchPosts(q = q, limit = 10).fold(
+                onSuccess = { _postSearchResults.value = it.results },
+                onFailure = { _postSearchResults.value = emptyList() }
+            )
+            isSearchingPosts = false
         }
     }
 

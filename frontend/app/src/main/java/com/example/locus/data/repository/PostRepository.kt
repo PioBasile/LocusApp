@@ -51,7 +51,8 @@ class PostRepository {
         groupIds: List<Int>,
         locationId: Int,
         audioFile: File? = null,
-        aiTags: Boolean = true
+        aiTags: Boolean = true,
+        tags: List<String> = emptyList()
     ): String {
         val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
         val imagePart = MultipartBody.Part.createFormData("image", imageFile.name, requestFile)
@@ -65,6 +66,7 @@ class PostRepository {
         val groupParts = groupIds.map { it.toString().toRequestBody("text/plain".toMediaTypeOrNull()) }
         val locationPart = locationId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
         val aiTagsPart = aiTags.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+        val tagParts = tags.map { it.toRequestBody("text/plain".toMediaTypeOrNull()) }
 
         return api.makePost(
             token = token,
@@ -73,7 +75,8 @@ class PostRepository {
             description = descriptionPart,
             groupes = groupParts,
             idLoc = locationPart,
-            aiTags = aiTagsPart
+            aiTags = aiTagsPart,
+            tags = tagParts
         )
     }
 

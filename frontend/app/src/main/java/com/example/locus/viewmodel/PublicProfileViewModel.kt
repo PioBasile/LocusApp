@@ -5,17 +5,21 @@ import androidx.lifecycle.viewModelScope
 import com.example.locus.data.remote.PostResponse
 import com.example.locus.data.repository.PostRepository
 import com.example.locus.data.repository.UserRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 data class PublicProfileUiState(
     val userId: Int = 0,
     val username: String = "",
     val ppurl: String? = null,
     val posts: List<PostResponse> = emptyList(),
+    val likeCounts: Map<Int, Int> = emptyMap(),
     val isLoading: Boolean = true,
     val isFollowing: Boolean = false
 )
@@ -28,18 +32,26 @@ class PublicProfileViewModel(
     private val _uiState = MutableStateFlow(PublicProfileUiState())
     val uiState: StateFlow<PublicProfileUiState> = _uiState.asStateFlow()
 
-    fun loadProfile(userId: Int) {
+    fun loadProfile(userId: Int, token: String = "") {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, userId = userId) }
             try {
-                val profile = postRepository.getPublicProfile(userId)
-                _uiState.update {
-                    it.copy(
-                        username = profile.username,
-                        ppurl = profile.ppurl,
-                        posts = profile.posts ?: emptyList(),
-                        isLoading = false
-                    )
+                supervisorScope {
+                    val profile = postRepository.getPublicProfile(userId)
+                    val posts = profile.posts ?: emptyList()
+                    val likeCountsMap = if (token.isNotEmpty()) {
+                        posts.map { post -> async { post.id to postRepository.getLikesForPost(token, post.id) } }
+                            .awaitAll().toMap()
+                    } else emptyMap()
+                    _uiState.update {
+                        it.copy(
+                            username = profile.username,
+                            ppurl = profile.ppurl,
+                            posts = posts,
+                            likeCounts = likeCountsMap,
+                            isLoading = false
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false) }

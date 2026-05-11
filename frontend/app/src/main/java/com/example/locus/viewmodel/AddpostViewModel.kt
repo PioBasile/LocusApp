@@ -42,14 +42,15 @@ class AddPostViewModel(
         groupIds: List<Int>,
         locationId: Int,
         audioFile: File? = null,
-        aiTags: Boolean = true
+        aiTags: Boolean = true,
+        tags: List<String> = emptyList()
     ) {
         viewModelScope.launch {
             isLoading = true
             successMessage = null
             errorMessage = null
             try {
-                val result = repository.uploadPost(token, imageFile, description, groupIds, locationId, audioFile, aiTags)
+                val result = repository.uploadPost(token, imageFile, description, groupIds, locationId, audioFile, aiTags, tags)
                 successMessage = result
             } catch (e: Exception) {
                 errorMessage = "Erreur de connexion : ${e.localizedMessage}"

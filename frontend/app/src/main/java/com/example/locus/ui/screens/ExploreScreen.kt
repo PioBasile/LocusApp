@@ -19,7 +19,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,8 +46,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.horizontalScroll
 import com.example.locus.data.model.Group
 import com.example.locus.data.remote.FollowerResponse
+import com.example.locus.data.remote.LieuResponse
+import com.example.locus.data.remote.SearchPostResult
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Topbar
@@ -63,6 +69,8 @@ fun ExploreScreen(
     val topUsers by viewModel.topUsers.collectAsState()
     val followedUserIds by viewModel.followedUserIds.collectAsState()
     val myGroupIds by viewModel.myGroupIds.collectAsState()
+    val places by viewModel.places.collectAsState()
+    val postSearchResults by viewModel.postSearchResults.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
@@ -117,6 +125,17 @@ fun ExploreScreen(
             Topbar()
 
             Column(modifier = Modifier.weight(1f).verticalScroll(scrollState).padding(bottom = 100.dp)) {
+
+                // Debounced search — fires 400ms after the user stops typing
+                LaunchedEffect(searchQuery) {
+                    delay(400)
+                    if (searchQuery.isNotBlank()) {
+                        viewModel.searchPosts(searchQuery)
+                        viewModel.loadPlaces(q = searchQuery)
+                    } else {
+                        viewModel.loadPlaces()
+                    }
+                }
 
                 // -- Search bar ----------------------------------------
                 OutlinedTextField(
@@ -230,6 +249,50 @@ fun ExploreScreen(
                                 onUserClick = { onUserClick(user.id) }
                             )
                         }
+                    }
+                }
+
+                // -- Post search results (only when searching) ---------
+                if (searchQuery.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Posts matching \"$searchQuery\"", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    if (viewModel.isSearchingPosts) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp)) }
+                    } else if (postSearchResults.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                            Text("No posts found", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
+                        }
+                    } else {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            postSearchResults.forEach { result -> PostSearchCard(result) }
+                        }
+                    }
+                }
+
+                // -- Nearby Places -------------------------------------
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Nearby Places", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { viewModel.loadPlaces() }) {
+                        Text("REFRESH", color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (viewModel.isLoadingPlaces) {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NavyDark) }
+                } else if (places.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        Text("No places found nearby", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        places.forEach { lieu -> PlaceCard(lieu) }
                     }
                 }
 
@@ -793,6 +856,97 @@ private fun JoinPrivateGroupSheet(groupName: String, onDismiss: () -> Unit, onJo
 
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                 Text("Cancel", color = MediumGray, fontSize = 14.sp)
+            }
+        }
+    }
+}
+
+// -- Places card ---------------------------------------------------------------
+
+@Composable
+private fun PlaceCard(lieu: LieuResponse) {
+    val categoryColor = when (lieu.categorie) {
+        "restaurant", "bar", "cafe" -> Color(0xFFFF7043)
+        "musee", "monument"         -> Color(0xFFAB47BC)
+        "parc"                      -> Color(0xFF66BB6A)
+        "sport", "plage"            -> Color(0xFF42A5F5)
+        "shopping"                  -> Color(0xFFFFCA28)
+        else                        -> Color(0xFF78909C)
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.width(180.dp)
+    ) {
+        Column {
+            if (lieu.urlImage != null) {
+                AsyncImage(
+                    model = lieu.urlImage,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(categoryColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Place, contentDescription = null, tint = categoryColor, modifier = Modifier.size(36.dp))
+                }
+            }
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(modifier = Modifier.clip(RoundedCornerShape(50.dp)).background(categoryColor.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    Text(lieu.categorie.replaceFirstChar { it.uppercase() }, color = categoryColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(lieu.nom, fontWeight = FontWeight.SemiBold, color = NavyDark, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (lieu.adresse.isNotEmpty()) {
+                    Text(lieu.adresse, color = InputHint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (lieu.note > 0f) {
+                        Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFA726), modifier = Modifier.size(11.dp))
+                        Text("%.1f".format(lieu.note), color = NavyDark, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (lieu.prixMoyen > 0) {
+                        Spacer(Modifier.weight(1f))
+                        Text("~${lieu.prixMoyen}€", color = Color(0xFF66BB6A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -- Post search result card ---------------------------------------------------
+
+@Composable
+private fun PostSearchCard(result: SearchPostResult) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(
+                model = result.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(10.dp))
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!result.locNom.isNullOrEmpty()) {
+                    Text(result.locNom, color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text(result.description, color = NavyDark, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (!result.tags.isNullOrEmpty()) {
+                    Text(result.tags.take(3).joinToString(" · ") { "#$it" }, color = InputHint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (result.distanceKm != null) {
+                Text("%.1fkm".format(result.distanceKm), color = InputHint, fontSize = 11.sp)
             }
         }
     }

@@ -2,6 +2,8 @@ package com.example.locus.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,13 +38,15 @@ fun PublicProfileScreen(
     token: String = "",
     currentUserId: Int? = null,
     onBack: () -> Unit = {},
+    onPostClick: (Int) -> Unit = {},
     viewModel: PublicProfileViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(userId) {
-        viewModel.loadProfile(userId)
+        viewModel.loadProfile(userId, token)
     }
 
     val isOwnProfile = currentUserId != null && currentUserId == userId
@@ -57,7 +61,7 @@ fun PublicProfileScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(colors = listOf(NavyDark, NavyMedium)))
-                .statusBarsPadding()
+                .padding(top = statusBarTopPadding)
                 .padding(horizontal = 16.dp)
                 .padding(top = 8.dp, bottom = 24.dp)
         ) {
@@ -164,7 +168,12 @@ fun PublicProfileScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             rowPosts.forEach { post ->
-                                PubPhotoGridItem(post = post, modifier = Modifier.weight(1f))
+                                PubPhotoGridItem(
+                                    post = post,
+                                    likeCount = uiState.likeCounts[post.id] ?: 0,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onPostClick(post.id) }
+                                )
                             }
                             repeat(3 - rowPosts.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
@@ -184,13 +193,14 @@ private fun PubStatItem(label: String, value: String) {
 }
 
 @Composable
-private fun PubPhotoGridItem(post: PostResponse, modifier: Modifier = Modifier) {
+private fun PubPhotoGridItem(post: PostResponse, likeCount: Int = 0, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     Box(
         modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(10.dp))
             .border(2.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
             .background(LightGray)
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
     ) {
         AsyncImage(
             model = post.imageUrl,
@@ -198,5 +208,18 @@ private fun PubPhotoGridItem(post: PostResponse, modifier: Modifier = Modifier) 
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(5.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .padding(horizontal = 5.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Icon(imageVector = Icons.Filled.FavoriteBorder, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(10.dp))
+            Text(text = likeCount.toString(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
