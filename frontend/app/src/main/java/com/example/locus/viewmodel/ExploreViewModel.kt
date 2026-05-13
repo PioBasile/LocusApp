@@ -58,6 +58,9 @@ class ExploreViewModel(
     private val _postSearchResults = MutableStateFlow<List<SearchPostResult>>(emptyList())
     val postSearchResults: StateFlow<List<SearchPostResult>> = _postSearchResults.asStateFlow()
 
+    private val _nearbyPostResults = MutableStateFlow<List<SearchPostResult>>(emptyList())
+    val nearbyPostResults: StateFlow<List<SearchPostResult>> = _nearbyPostResults.asStateFlow()
+
     var isSearchingPosts by mutableStateOf(false)
         private set
 
@@ -196,6 +199,18 @@ class ExploreViewModel(
         viewModelScope.launch {
             travelPathRepository.searchPosts(gps = gps, radiusKm = 5.0, limit = 50).fold(
                 onSuccess = { nearbyPostCount = it.results.size },
+                onFailure = {}
+            )
+        }
+    }
+
+    fun loadNearbyPostsFull(gps: String) {
+        viewModelScope.launch {
+            travelPathRepository.searchPosts(gps = gps, radiusKm = 5.0, limit = 10).fold(
+                onSuccess = { resp ->
+                    _nearbyPostResults.value = resp.results
+                    fetchAuthorNames(resp.results)
+                },
                 onFailure = {}
             )
         }

@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
@@ -28,6 +27,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,6 +53,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.locus.R
 import com.example.locus.data.model.Group
 import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.LieuResponse
@@ -80,12 +83,13 @@ fun ExploreScreen(
     val myGroupIds by viewModel.myGroupIds.collectAsState()
     val places by viewModel.places.collectAsState()
     val postSearchResults by viewModel.postSearchResults.collectAsState()
+    val nearbyPostResults by viewModel.nearbyPostResults.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
-    var showingNearbyPosts by remember { mutableStateOf(false) }
     var currentGps by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showingNearbyPosts by remember { mutableStateOf(false) }
 
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     var notificationIsError by remember { mutableStateOf(false) }
@@ -132,6 +136,8 @@ fun ExploreScreen(
                 if (loc != null) {
                     currentGps = "${loc.latitude},${loc.longitude}"
                     viewModel.loadNearbyPosts(currentGps)
+                    viewModel.loadNearbyPostsFull(currentGps)
+                    viewModel.loadPlaces(lat = loc.latitude, lon = loc.longitude)
                 } else {
                     client.getCurrentLocation(
                         com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
@@ -140,6 +146,8 @@ fun ExploreScreen(
                         freshLoc?.let {
                             currentGps = "${it.latitude},${it.longitude}"
                             viewModel.loadNearbyPosts(currentGps)
+                            viewModel.loadNearbyPostsFull(currentGps)
+                            viewModel.loadPlaces(lat = it.latitude, lon = it.longitude)
                         }
                     }
                 }
@@ -174,12 +182,14 @@ fun ExploreScreen(
                 // Debounced search — fires 400ms after the user stops typing
                 LaunchedEffect(searchQuery) {
                     delay(400)
-                    showingNearbyPosts = false
+                    val lat = currentGps.split(",").getOrNull(0)?.toDoubleOrNull()
+                    val lon = currentGps.split(",").getOrNull(1)?.toDoubleOrNull()
                     if (searchQuery.isNotBlank()) {
+                        showingNearbyPosts = false
                         viewModel.searchPosts(searchQuery)
-                        viewModel.loadPlaces(q = searchQuery)
+                        viewModel.loadPlaces(q = searchQuery, lat = lat, lon = lon)
                     } else {
-                        viewModel.loadPlaces()
+                        viewModel.loadPlaces(lat = lat, lon = lon)
                     }
                 }
 
@@ -298,23 +308,14 @@ fun ExploreScreen(
                     }
                 }
 
-                // -- Post search results / nearby posts ----------------
-                if (searchQuery.isNotBlank() || showingNearbyPosts) {
+                // -- Search post results (text search only) -----------
+                if (searchQuery.isNotBlank()) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            if (showingNearbyPosts) "Posts near you" else "Posts matching \"$searchQuery\"",
-                            color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f)
-                        )
-                        if (showingNearbyPosts) {
-                            TextButton(onClick = { showingNearbyPosts = false }) {
-                                Text("✕", color = InputHint, fontSize = 13.sp)
-                            }
-                        }
-                    }
+                    Text(
+                        "Posts matching \"$searchQuery\"",
+                        color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                     Spacer(modifier = Modifier.height(10.dp))
                     if (viewModel.isSearchingPosts) {
                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -334,6 +335,30 @@ fun ExploreScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                // -- Nearby Places -------------------------------------
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Nearby Places", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { viewModel.loadPlaces(lat = currentGps.split(",").getOrNull(0)?.toDoubleOrNull(), lon = currentGps.split(",").getOrNull(1)?.toDoubleOrNull()) }) {
+                        Text("REFRESH", color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (viewModel.isLoadingPlaces) {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NavyDark) }
+                } else if (places.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                        Text("No places found nearby", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        places.forEach { lieu -> PlaceCard(lieu) }
                     }
                 }
 
@@ -364,27 +389,37 @@ fun ExploreScreen(
                     }
                 }
 
-                // -- Nearby Places -------------------------------------
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Nearby Places", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { viewModel.loadPlaces() }) {
-                        Text("REFRESH", color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                if (viewModel.isLoadingPlaces) {
-                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NavyDark) }
-                } else if (places.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                        Text("No places found nearby", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
-                    }
-                } else {
+                // -- Nearby posts expanded list ------------------------
+                if (showingNearbyPosts) {
+                    Spacer(modifier = Modifier.height(16.dp))
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        places.forEach { lieu -> PlaceCard(lieu) }
+                        Text("Posts near you", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { showingNearbyPosts = false }) {
+                            Text("✕", color = InputHint, fontSize = 13.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    if (viewModel.isSearchingPosts) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp))
+                        }
+                    } else if (postSearchResults.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                            Text("No posts found", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
+                        }
+                    } else {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            postSearchResults.forEach { result ->
+                                PostSearchCard(
+                                    result = result,
+                                    authorName = viewModel.postAuthorNames[result.user_id],
+                                    onClick = { onPostClick(result.id) }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -471,17 +506,16 @@ private fun TopUserCard(
                     .size(44.dp)
                     .clip(CircleShape)
                     .border(2.dp, if (rank == 1) GoldPrimary else LightGray, CircleShape)
-                    .background(NavyDark),
+                    .background(White),
                 contentAlignment = Alignment.Center
             ) {
                 if (!user.ppurl.isNullOrBlank() && user.ppurl != "img.jpg") {
                     AsyncImage(model = user.ppurl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
-                    Text(
-                        text = user.username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        color = GoldPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_logo),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().padding(6.dp)
                     )
                 }
             }

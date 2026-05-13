@@ -91,7 +91,13 @@ class AddPostViewModel(
     }
 
     fun selectLieu(lieu: LieuResponse) {
-        selectedLieuId = lieu.idLoc ?: lieu.id
+        // lieu.idLoc is the Localisation.id_loc linked to this Lieux entry.
+        // Only monuments/musées/parcs have one. For everything else (restaurants, bars…)
+        // idLoc is null and falling back to lieu.id (a Lieux.id_lieu) accidentally
+        // matches an unrelated Localisation row, placing the dot at the wrong location
+        // on the map. Fall back to 1 (Debug, Montpellier centre) instead — at least it
+        // stays in the right city. The correct name is always in the ---loc: description.
+        selectedLieuId = lieu.idLoc ?: 1
         locationSuggestions = emptyList()
     }
 

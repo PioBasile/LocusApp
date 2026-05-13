@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.remote.CommentResponse
 import com.example.locus.data.remote.PostResponse
+import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.repository.PostRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import java.io.File
 
 class PostDetailViewModel(
     private val postRepository: PostRepository = PostRepository()
@@ -82,12 +84,16 @@ class PostDetailViewModel(
         }
     }
 
-    fun addComment(token: String, postId: Int, text: String) {
+    fun addComment(token: String, postId: Int, text: String, audioFile: File? = null) {
         viewModelScope.launch {
             try {
-                postRepository.addComment(token, postId, text)
+                postRepository.addComment(token, postId, text, audioFile)
                 comments = postRepository.getComments(token, postId)
             } catch (e: Exception) { }
         }
     }
+
+    suspend fun getPublicProfile(userId: Int): PublicProfileResponse? = try {
+        postRepository.getPublicProfile(userId)
+    } catch (_: Exception) { null }
 }

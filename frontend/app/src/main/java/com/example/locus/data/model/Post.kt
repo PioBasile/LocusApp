@@ -33,5 +33,8 @@ data class Post(
     val audioUrl: String? = null,
 
     @SerializedName("tags")
-    val tags: List<String>? = null
+    val tags: List<String>? = null,
+
+    @SerializedName("loc_gps")
+    val locGps: String? = null
 )

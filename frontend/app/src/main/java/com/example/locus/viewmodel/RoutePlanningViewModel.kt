@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.locus.data.model.*
 import com.example.locus.data.remote.*
 import com.example.locus.data.remote.RetrofitClient
+import com.example.locus.data.repository.PostRepository
 import com.example.locus.data.repository.TravelPathRepository
 import com.example.locus.utils.parseLatLon
 import com.mapbox.geojson.Point
@@ -25,6 +26,7 @@ enum class PlanningState { IDLE, PLANNING, GENERATING, OPTIONS, DETAIL, PLACE_DE
 class RoutePlanningViewModel : ViewModel() {
 
     private val repo = TravelPathRepository(RetrofitClient.api)
+    private val postRepo = PostRepository()
 
     var state by mutableStateOf(PlanningState.IDLE)
         private set
@@ -79,6 +81,12 @@ class RoutePlanningViewModel : ViewModel() {
         private set
 
     var nearbyPosts by mutableStateOf<List<SearchPostResult>>(emptyList())
+        private set
+
+    var selectedNearbyPost: SearchPostResult? by mutableStateOf(null)
+        private set
+
+    var postAuthorNames by mutableStateOf<Map<Int, String>>(emptyMap())
         private set
 
     var focusedPlaceGps: String? by mutableStateOf(null)
@@ -293,6 +301,18 @@ class RoutePlanningViewModel : ViewModel() {
 
     fun clearFocusedPlaceGps() { focusedPlaceGps = null }
     fun setFocusedGps(gps: String) { focusedPlaceGps = gps }
+
+    fun selectNearbyPost(post: SearchPostResult?) {
+        selectedNearbyPost = post
+        if (post != null && post.user_id !in postAuthorNames) {
+            viewModelScope.launch {
+                try {
+                    val profile = postRepo.getPublicProfile(post.user_id)
+                    postAuthorNames = postAuthorNames + (post.user_id to profile.username)
+                } catch (_: Exception) { }
+            }
+        }
+    }
 
     fun openNavigationStart() { showNavigationStart = true; navRouteError = null }
     fun closeNavigationStart() { showNavigationStart = false; startSuggestions = emptyList() }

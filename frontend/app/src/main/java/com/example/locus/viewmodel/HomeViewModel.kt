@@ -50,6 +50,10 @@ class HomeViewModel(
     private val _posts = MutableStateFlow<List<PostResponse>>(emptyList())
     val posts: StateFlow<List<PostResponse>> = _posts.asStateFlow()
 
+    // id_loc → "lat,lon" — resolved lazily after posts load
+    var locationGpsCache by mutableStateOf<Map<Int, String>>(emptyMap())
+        private set
+
     private val _userGroups = MutableStateFlow<List<MyGroupResponse>>(emptyList())
     val userGroups: StateFlow<List<MyGroupResponse>> = _userGroups.asStateFlow()
 
@@ -68,6 +72,17 @@ class HomeViewModel(
         viewModelScope.launch {
             val fetchedPosts = postRepository.getPostsByGroup(token, groupId)
             _posts.value = fetchedPosts
+            // Resolve GPS for posts that have a location but no GPS in the response
+            val missingIds = fetchedPosts.mapNotNull { it.id_loc }.distinct()
+                .filter { it !in locationGpsCache }
+            val resolved = locationGpsCache.toMutableMap()
+            for (id in missingIds) {
+                try {
+                    val gps = postRepository.getLocationGps(id)
+                    if (!gps.isNullOrBlank()) resolved[id] = gps
+                } catch (_: Exception) { }
+            }
+            locationGpsCache = resolved
         }
     }
 

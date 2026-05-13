@@ -31,6 +31,7 @@ fun HomeScreen(
     isGuest: Boolean = false,
     onNavigate: (NavDestination) -> Unit = {},
     onUserClick: (Int) -> Unit = {},
+    onLocationClick: ((String) -> Unit)? = null,
     viewModel: HomeViewModel = viewModel()
 ) {
     val uiState = viewModel.uiState
@@ -170,6 +171,7 @@ fun HomeScreen(
                         val serverTags = postResponse.tags?.filter { it.isNotBlank() } ?: emptyList()
                         val allTags = (inlineTags + serverTags).distinct().takeIf { it.isNotEmpty() }
 
+                        val resolvedGps = postResponse.id_loc?.let { viewModel.locationGpsCache[it] }
                         val postForUI = Post(
                             id = postResponse.id,
                             userId = postResponse.user_id,
@@ -179,9 +181,10 @@ fun HomeScreen(
                             imageUrl = postResponse.imageUrl,
                             date = postResponse.date,
                             idLoc = postResponse.id_loc,
-                            locationName = locationName,
+                            locationName = "$locationName >",
                             audioUrl = postResponse.audioUrl,
-                            tags = allTags
+                            tags = allTags,
+                            locGps = resolvedGps
                         )
 
                         Postcard(
@@ -193,7 +196,8 @@ fun HomeScreen(
                                 viewModel.loadCommentsForPost(token, postForUI.id)
                                 selectedPostIdForComments = postForUI.id
                             },
-                            onUserClick = onUserClick
+                            onUserClick = onUserClick,
+                            onLocationClick = onLocationClick
                         )
                     }
                 }

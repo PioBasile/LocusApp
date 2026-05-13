@@ -1,7 +1,9 @@
 package com.example.locus.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,15 +20,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.locus.R
-import com.example.locus.data.remote.UserAvisResponse
 import com.example.locus.ui.theme.*
-import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.PublicProfileViewModel
 
 @Composable
@@ -53,7 +52,7 @@ fun PublicProfileScreen(
             .fillMaxSize()
             .background(OffWhite)
     ) {
-        // -- Navy header -------------------------------------------
+        // Header
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -94,7 +93,7 @@ fun PublicProfileScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        androidx.compose.foundation.Image(
+                        Image(
                             painter = painterResource(id = R.drawable.ic_logo),
                             contentDescription = "Default avatar",
                             modifier = Modifier.fillMaxSize().padding(12.dp)
@@ -106,16 +105,13 @@ fun PublicProfileScreen(
                     Text(text = uiState.username, color = White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 }
 
-                // Stats
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(28.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    PubStatItem(label = "Posts", value = uiState.posts.size.toString())
-                    PubStatItem(label = "Reviews", value = uiState.userAvis.size.toString())
+                // Post count stat
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = uiState.posts.size.toString(), color = White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(text = "Posts", color = White.copy(alpha = 0.6f), fontSize = 12.sp)
                 }
 
-                // Follow button (hidden for own profile)
+                // Follow button
                 if (!isOwnProfile && !uiState.isLoading && token.isNotEmpty()) {
                     Button(
                         onClick = { viewModel.toggleFollow(token) },
@@ -139,88 +135,52 @@ fun PublicProfileScreen(
 
         HorizontalDivider(color = LightGray, thickness = 0.5.dp)
 
-        // -- Reviews list ------------------------------------------
+        // Photo grid
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 14.dp, bottom = 16.dp)
         ) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = NavyDark)
                 }
-            } else if (uiState.userAvis.isEmpty()) {
+            } else if (uiState.posts.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "No reviews yet",
+                        text = "No posts yet",
                         color = MediumGray,
                         fontSize = 14.sp,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     )
                 }
             } else {
-                Spacer(Modifier.height(12.dp))
-                uiState.userAvis.forEach { avis ->
-                    AvisCard(avis = avis)
-                    Spacer(Modifier.height(10.dp))
+                val rows = uiState.posts.chunked(3)
+                rows.forEach { rowPosts ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowPosts.forEach { post ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(1.dp)
+                                    .clickable { onPostClick(post.id) }
+                            ) {
+                                AsyncImage(
+                                    model = post.imageUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        // Fill empty cells in last row
+                        repeat(3 - rowPosts.size) {
+                            Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AvisCard(avis: UserAvisResponse) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = White,
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = avis.nomLieu,
-                    color = NavyDark,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = formatTimeAgo(avis.createdAt),
-                    color = MediumGray,
-                    fontSize = 11.sp
-                )
-            }
-            Text(
-                text = "★".repeat(avis.note) + "☆".repeat(5 - avis.note),
-                color = GoldPrimary,
-                fontSize = 14.sp,
-                letterSpacing = 2.sp
-            )
-            if (avis.commentaire.isNotBlank()) {
-                Text(
-                    text = avis.commentaire,
-                    color = NavyDark.copy(alpha = 0.75f),
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PubStatItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, color = White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(text = label, color = White.copy(alpha = 0.6f), fontSize = 12.sp)
     }
 }

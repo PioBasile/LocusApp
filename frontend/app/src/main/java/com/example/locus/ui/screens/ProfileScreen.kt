@@ -18,8 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -43,14 +41,6 @@ import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.ProfileViewModel
 
-data class ProfilePost(
-    val id: Int,
-    val imageUrl: String,
-    val likeCount: Int
-)
-
-enum class ProfileTab { PHOTOS, PINS }
-
 @Composable
 fun ProfileScreen(
     onNavigate: (NavDestination) -> Unit = {},
@@ -62,15 +52,12 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var selectedTab by remember { mutableStateOf(ProfileTab.PHOTOS) }
     var settingsExpanded by remember { mutableStateOf(false) }
     var selectedGroupFilter by remember { mutableStateOf<Int?>(null) }
     var showChangeUsernameDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
-    // Capture status bar height once at composition time — avoids async layout passes from statusBarsPadding()
     val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // Must be outside any conditional to respect composition order rules
     val chipScrollState = rememberScrollState()
 
     val postGroupIds = remember(uiState.userPosts) { uiState.userPosts.flatMap { it.groupe }.toSet() }
@@ -82,7 +69,7 @@ fun ProfileScreen(
         uiState.userPosts
             .filter { selectedGroupFilter == null || it.groupe.contains(selectedGroupFilter) }
             .sortedByDescending { it.date }
-            .map { p -> ProfilePost(id = p.id, imageUrl = p.imageUrl, likeCount = uiState.likeCounts[p.id] ?: 0) }
+            .map { p -> Triple(p.id, p.imageUrl, uiState.likeCounts[p.id] ?: 0) }
     }
 
     LaunchedEffect(Unit) {
@@ -131,8 +118,7 @@ fun ProfileScreen(
                 .verticalScroll(scrollState)
                 .padding(bottom = 100.dp)
         ) {
-
-            // -- Navy header ---------------------------------------
+            // -- Navy header
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -162,25 +148,14 @@ fun ProfileScreen(
                         modifier = Modifier.background(White)
                     ) {
                         DropdownMenuItem(
-                            text = {
-                                Text(text = "Change username", color = NavyDark, fontSize = 14.sp)
-                            },
-                            leadingIcon = {
-                                Icon(imageVector = Icons.Filled.Edit, contentDescription = null, tint = NavyDark, modifier = Modifier.size(18.dp))
-                            },
-                            onClick = {
-                                settingsExpanded = false
-                                showChangeUsernameDialog = true
-                            }
+                            text = { Text(text = "Change username", color = NavyDark, fontSize = 14.sp) },
+                            leadingIcon = { Icon(imageVector = Icons.Filled.Edit, contentDescription = null, tint = NavyDark, modifier = Modifier.size(18.dp)) },
+                            onClick = { settingsExpanded = false; showChangeUsernameDialog = true }
                         )
                         HorizontalDivider(color = LightGray, thickness = 0.5.dp)
                         DropdownMenuItem(
-                            text = {
-                                Text(text = "Log out", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            },
-                            leadingIcon = {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                            },
+                            text = { Text(text = "Log out", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) },
+                            leadingIcon = { Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
                             onClick = { settingsExpanded = false; onLogout() }
                         )
                     }
@@ -191,7 +166,7 @@ fun ProfileScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // -- Avatar ------------------------------------
+                    // Avatar
                     Box(contentAlignment = Alignment.BottomEnd) {
                         Box(
                             modifier = Modifier
@@ -231,7 +206,7 @@ fun ProfileScreen(
 
                     Text(text = uiState.profile?.username ?: "...", color = White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
 
-                    // -- Stats row ---------------------------------
+                    // Stats row
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(20.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -247,30 +222,9 @@ fun ProfileScreen(
                 }
             }
 
-            // -- Tab selector --------------------------------------
-            Row(
-                modifier = Modifier.fillMaxWidth().background(White).padding(horizontal = 24.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ProfileTabChip(
-                    label = "Photos",
-                    icon = { Icon(imageVector = Icons.Filled.GridOn, contentDescription = null, modifier = Modifier.size(15.dp)) },
-                    selected = selectedTab == ProfileTab.PHOTOS,
-                    onClick = { selectedTab = ProfileTab.PHOTOS },
-                    modifier = Modifier.weight(1f)
-                )
-                ProfileTabChip(
-                    label = "Pins",
-                    icon = { Icon(imageVector = Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(15.dp)) },
-                    selected = selectedTab == ProfileTab.PINS,
-                    onClick = { selectedTab = ProfileTab.PINS },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
             HorizontalDivider(color = LightGray, thickness = 0.5.dp)
 
-            // -- Group filter chips --------------------------------
+            // Group filter chips
             if (filterGroups.size > 1) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(chipScrollState).padding(horizontal = 16.dp, vertical = 10.dp),
@@ -291,7 +245,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // -- Photo grid ----------------------------------------
+            // Photo grid
             if (posts.isEmpty() && !uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                     Text(
@@ -308,7 +262,31 @@ fun ProfileScreen(
                 ) {
                     posts.chunked(3).forEach { rowPosts ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowPosts.forEach { post -> PhotoGridItem(post = post, modifier = Modifier.weight(1f), onClick = { onPostClick(post.id) }) }
+                            rowPosts.forEach { (postId, imageUrl, likeCount) ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(LightGray)
+                                        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onPostClick(postId) }
+                                ) {
+                                    AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(5.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.Black.copy(alpha = 0.55f))
+                                            .padding(horizontal = 5.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Filled.FavoriteBorder, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(10.dp))
+                                        Text(text = likeCount.toString(), color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                             repeat(3 - rowPosts.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
                     }
@@ -322,7 +300,6 @@ fun ProfileScreen(
     }
 }
 
-// -- Change username dialog ----------------------------------------------------
 @Composable
 private fun ChangeUsernameDialog(
     currentUsername: String,
@@ -331,7 +308,6 @@ private fun ChangeUsernameDialog(
     onConfirm: (String) -> Unit
 ) {
     var newUsername by remember { mutableStateOf(currentUsername) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = White,
@@ -358,15 +334,12 @@ private fun ChangeUsernameDialog(
                 enabled = newUsername.isNotBlank() && newUsername != currentUsername && !isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
                 shape = RoundedCornerShape(50.dp)
-            ) {
-                Text("Save", color = White)
-            }
+            ) { Text("Save", color = White) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MediumGray) } }
     )
 }
 
-// -- Stat item -----------------------------------------------------------------
 @Composable
 private fun StatItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -380,33 +353,11 @@ private fun StatDivider() {
     Box(modifier = Modifier.width(1.dp).height(24.dp).background(White.copy(alpha = 0.2f)))
 }
 
-// -- Tab chip ------------------------------------------------------------------
-@Composable
-private fun ProfileTabChip(label: String, icon: @Composable () -> Unit, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(38.dp),
-        shape = RoundedCornerShape(50.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) NavyDark else OffWhite,
-            contentColor = if (selected) White else NavyDark
-        ),
-        elevation = ButtonDefaults.buttonElevation(0.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-    ) {
-        icon()
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(text = label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 13.sp)
-    }
-}
-
-// -- Group filter chip ---------------------------------------------------------
 @Composable
 private fun GroupFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val bg = if (selected) NavyDark else OffWhite
     val textColor = if (selected) White else NavyDark
     val borderColor = if (selected) NavyDark else LightGray
-
     Box(
         modifier = Modifier
             .border(1.dp, borderColor, RoundedCornerShape(50.dp))
@@ -415,34 +366,6 @@ private fun GroupFilterChip(label: String, selected: Boolean, onClick: () -> Uni
     ) {
         TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), modifier = Modifier.height(32.dp)) {
             Text(text = label, color = textColor, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-        }
-    }
-}
-
-// -- Photo grid item -----------------------------------------------------------
-@Composable
-private fun PhotoGridItem(post: ProfilePost, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
-    Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .border(2.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-            .background(LightGray)
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
-    ) {
-        AsyncImage(model = post.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(5.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 5.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Icon(imageVector = Icons.Filled.FavoriteBorder, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(10.dp))
-            Text(text = post.likeCount.toString(), color = White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

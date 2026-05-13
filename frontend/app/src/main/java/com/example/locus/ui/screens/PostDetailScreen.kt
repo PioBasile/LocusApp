@@ -1,7 +1,7 @@
 package com.example.locus.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -11,8 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -25,11 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -38,32 +38,32 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.locus.R
+import com.example.locus.data.remote.CommentResponse
 import com.example.locus.ui.components.AudioPlayerBar
+import com.example.locus.ui.components.AudioRecorderButton
 import com.example.locus.ui.theme.*
 import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.PostDetailViewModel
+import java.io.File
 
 private data class ParsedPost(val caption: String, val location: String?, val manualTags: List<String>)
 
 private fun parseDescription(raw: String): ParsedPost {
     var rest = raw.trim()
-
     val tagsMarker = "\n---tags:"
     val tagsIdx = rest.indexOf(tagsMarker)
     val manualTags = if (tagsIdx >= 0) {
-        val tagsStr = rest.substring(tagsIdx + tagsMarker.length).trim()
+        val t = rest.substring(tagsIdx + tagsMarker.length).trim()
         rest = rest.substring(0, tagsIdx)
-        tagsStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        t.split(",").map { it.trim() }.filter { it.isNotBlank() }
     } else emptyList()
-
     val locMarker = "\n---loc:"
     val locIdx = rest.indexOf(locMarker)
     val location = if (locIdx >= 0) {
-        val loc = rest.substring(locIdx + locMarker.length).trim()
+        val l = rest.substring(locIdx + locMarker.length).trim()
         rest = rest.substring(0, locIdx)
-        loc
+        l
     } else null
-
     return ParsedPost(rest.trim(), location, manualTags)
 }
 
@@ -78,211 +78,236 @@ fun PostDetailScreen(
 ) {
     LaunchedEffect(postId) { viewModel.load(postId, token) }
 
-    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val post = viewModel.post
-    var showComments by remember { mutableStateOf(true) }
     var commentText by remember { mutableStateOf("") }
-
+    var recordedAudio by remember { mutableStateOf<File?>(null) }
     val parsed = remember(post?.description) { parseDescription(post?.description ?: "") }
-    val caption = parsed.caption
-    val location = parsed.location
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(NavyDark)
-    ) {
-        // weight(1f) is always on this Box — never inside a conditional
-        Box(modifier = Modifier.weight(1f)) {
-            when {
-                viewModel.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = GoldPrimary, modifier = Modifier.size(40.dp))
-                }
-                post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Post not found", color = White.copy(alpha = 0.5f), fontSize = 15.sp)
-                }
-                else -> Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                ) {
+    Box(modifier = Modifier.fillMaxSize().background(White)) {
+        when {
+            viewModel.isLoading -> {
+                CircularProgressIndicator(
+                    color = GoldPrimary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.align(Alignment.Center).size(44.dp)
+                )
+            }
+            post == null -> {
+                Text(
+                    "Post not found",
+                    color = MediumGray,
+                    fontSize = 15.sp,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            else -> {
+                val caption  = parsed.caption
+                val location = parsed.location?.takeIf { it.isNotBlank() && !it.equals("debug", ignoreCase = true) }
+                val tags     = post.tags?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: parsed.manualTags
 
-                    // ── Header ─────────────────────────────────────────
-                    Row(
+                Column(modifier = Modifier.fillMaxSize()) {
+
+                    // ─── Scrollable body ──────────────────────────────────────
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = statusBarTopPadding)
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        // Back button
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
 
-                        // Avatar
+                        // ── Hero image with status bar padding ────────────────
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(White),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .padding(top = statusBarTop)
                         ) {
-                            if (!viewModel.authorPpUrl.isNullOrBlank() && viewModel.authorPpUrl != "img.jpg") {
-                                AsyncImage(
-                                    model = viewModel.authorPpUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                androidx.compose.foundation.Image(
-                                    painter = painterResource(id = R.drawable.ic_logo),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().padding(8.dp)
-                                )
-                            }
-                        }
-
-                        // Username + time
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = viewModel.authorName.ifEmpty { "User ${post.user_id}" },
-                                color = White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                            AsyncImage(
+                                model = post.imageUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
                             )
-                            Text(
-                                text = formatTimeAgo(post.date),
-                                color = White.copy(alpha = 0.55f),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-
-                    // ── Image ──────────────────────────────────────────
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                        AsyncImage(
-                            model = post.imageUrl,
-                            contentDescription = "Post image",
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight()
-                                .clip(RoundedCornerShape(14.dp))
-                        )
-                    }
-
-                    // ── Audio player ───────────────────────────────────
-                    if (!post.audioUrl.isNullOrBlank()) {
-                        AudioPlayerBar(
-                            audioUrl = post.audioUrl,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp)
-                                .padding(top = 10.dp)
-                        )
-                    }
-
-                    // ── Actions + location ─────────────────────────────
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                            // Like
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { viewModel.toggleLike(token, post.id) },
-                                    enabled = !viewModel.isLikeInFlight,
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (viewModel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                        contentDescription = "Like",
-                                        tint = if (viewModel.isLiked) Color(0xFFE53935) else GoldPrimary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Text(
-                                    text = viewModel.likeCount.toString(),
-                                    color = White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            // Comment
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { showComments = !showComments },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.ChatBubbleOutline,
-                                        contentDescription = "Comments",
-                                        tint = GoldPrimary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Text(
-                                    text = viewModel.comments.size.toString(),
-                                    color = White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-
-                        // Location pill — tappable if GPS resolved from id_loc
-                        if (!location.isNullOrBlank() && !location.equals("debug", ignoreCase = true)) {
-                            val locGps = viewModel.locationGps
-                            Row(
+                            // Gradient for back-button legibility
+                            Box(
                                 modifier = Modifier
-                                    .background(White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
-                                    .then(
-                                        if (locGps != null && onLocationClick != null)
-                                            Modifier.clickable(
-                                                indication = null,
-                                                interactionSource = remember { MutableInteractionSource() }
-                                            ) { onLocationClick(locGps) }
-                                        else Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)
+                                        )
                                     )
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            )
+                            // Back button
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(top = 10.dp, start = 14.dp)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.28f))
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { onBack() },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.LocationOn,
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        // ── Author row ────────────────────────────────────────
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp)
+                                .padding(top = 18.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(LightGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!viewModel.authorPpUrl.isNullOrBlank() && viewModel.authorPpUrl != "img.jpg") {
+                                    AsyncImage(
+                                        model = viewModel.authorPpUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Image(
+                                        painter = painterResource(R.drawable.ic_logo),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize().padding(8.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = viewModel.authorName.ifEmpty { "User ${post.user_id}" },
+                                    color = NavyDark,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = formatTimeAgo(post.date),
+                                    color = MediumGray,
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            // Like + comment actions
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    IconButton(
+                                        onClick = { viewModel.toggleLike(token, post.id) },
+                                        enabled = !viewModel.isLikeInFlight,
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (viewModel.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                            contentDescription = "Like",
+                                            tint = if (viewModel.isLiked) Color(0xFFE05C5C) else NavyDark,
+                                            modifier = Modifier.size(21.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = viewModel.likeCount.toString(),
+                                        color = NavyDark,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier.size(30.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.ChatBubbleOutline,
+                                            contentDescription = null,
+                                            tint = NavyDark,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = viewModel.comments.size.toString(),
+                                        color = NavyDark,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+
+                        // ── Caption ───────────────────────────────────────────
+                        if (caption.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = NavyDark)) {
+                                        append("${viewModel.authorName.ifEmpty { "User ${post.user_id}" }} ")
+                                    }
+                                    withStyle(SpanStyle(color = NavyDark.copy(alpha = 0.72f))) {
+                                        append(caption)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp),
+                                fontSize = 14.sp,
+                                lineHeight = 21.sp
+                            )
+                        }
+
+                        // ── Location ──────────────────────────────────────────
+                        if (!location.isNullOrBlank()) {
+                            Spacer(Modifier.height(12.dp))
+                            val locGps = viewModel.locationGps
+                            val tappable = locGps != null && onLocationClick != null
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 18.dp)
+                                    .clip(RoundedCornerShape(50.dp))
+                                    .background(LightGray)
+                                    .then(
+                                        if (tappable) Modifier.clickable(
+                                            indication = null,
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) { onLocationClick!!(locGps!!) }
+                                        else Modifier
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.LocationOn,
                                     contentDescription = null,
                                     tint = GoldPrimary,
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = location,
-                                    color = if (locGps != null && onLocationClick != null) GoldPrimary else White,
+                                    color = NavyDark,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
@@ -290,217 +315,264 @@ fun PostDetailScreen(
                                 )
                             }
                         }
-                    }
 
-                    // ── Caption ────────────────────────────────────────
-                    if (caption.isNotBlank()) {
-                        Text(
-                            text = buildAnnotatedString {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = White)) {
-                                    append("${viewModel.authorName.ifEmpty { "User ${post.user_id}" }} : ")
-                                }
-                                withStyle(SpanStyle(color = White.copy(alpha = 0.9f))) {
-                                    append(caption)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp),
-                            fontSize = 14.sp,
-                            lineHeight = 21.sp
-                        )
-                    }
-
-                    // ── Tags — prefer AI tags, fall back to manual tags embedded in description ──
-                    val tags = post.tags?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-                        ?: parsed.manualTags
-                    if (tags.isNotEmpty()) {
-                        FlowRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp)
-                                .padding(top = 10.dp, bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            tags.forEach { tag ->
-                                Box(
-                                    modifier = Modifier
-                                        .background(White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "#$tag",
-                                        color = GoldPrimary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // ── Comments ───────────────────────────────────────
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        color = White.copy(alpha = 0.1f)
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Comments (${viewModel.comments.size})",
-                            color = White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        TextButton(
-                            onClick = { showComments = !showComments },
-                            contentPadding = PaddingValues(horizontal = 0.dp)
-                        ) {
-                            Text(
-                                text = if (showComments) "Hide" else "Show",
-                                color = GoldPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-
-                    if (showComments) {
-                        if (viewModel.comments.isEmpty()) {
-                            Box(
+                        // ── Tags ──────────────────────────────────────────────
+                        if (tags.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            FlowRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(horizontal = 18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(
-                                    text = "No comments yet. Be the first!",
-                                    color = White.copy(alpha = 0.4f),
-                                    fontSize = 13.sp,
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                )
-                            }
-                        } else {
-                            Column(modifier = Modifier.padding(bottom = 4.dp)) {
-                                viewModel.comments.forEach { comment ->
-                                    Row(
+                                tags.forEach { tag ->
+                                    Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            .background(
+                                                GoldPrimary.copy(alpha = 0.10f),
+                                                RoundedCornerShape(50.dp)
+                                            )
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .background(White.copy(alpha = 0.1f))
-                                                .border(1.dp, GoldPrimary.copy(alpha = 0.4f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "U",
-                                                color = GoldPrimary,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "User ${comment.userId}",
-                                                color = GoldPrimary,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(
-                                                text = comment.commentaire,
-                                                color = White.copy(alpha = 0.88f),
-                                                fontSize = 13.sp,
-                                                lineHeight = 19.sp
-                                            )
-                                        }
-                                    }
-                                    if (comment != viewModel.comments.last()) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(horizontal = 14.dp),
-                                            color = White.copy(alpha = 0.06f)
+                                        Text(
+                                            text = "#$tag",
+                                            color = GoldPrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(if (token.isNotEmpty()) 72.dp else 16.dp))
-                }
-            }
-        }
+                        // ── Audio ─────────────────────────────────────────────
+                        if (!post.audioUrl.isNullOrBlank()) {
+                            Spacer(Modifier.height(12.dp))
+                            AudioPlayerBar(
+                                audioUrl = post.audioUrl,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp)
+                            )
+                        }
 
-        // ── Comment input ─────────────────────────────────────────────
-        // Kept outside the weight(1f) child and uses fixed padding (no navigationBarsPadding)
-        if (token.isNotEmpty() && post != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(NavyDark)
-                    .drawBehind {
-                        drawRect(color = White.copy(alpha = 0.08f), size = Size(size.width, 1.dp.toPx()))
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = commentText,
-                    onValueChange = { commentText = it },
-                    placeholder = { Text("Add a comment…", color = White.copy(alpha = 0.35f), fontSize = 13.sp) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(50.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = White.copy(alpha = 0.08f),
-                        focusedContainerColor = White.copy(alpha = 0.12f),
-                        unfocusedBorderColor = White.copy(alpha = 0.15f),
-                        focusedBorderColor = GoldPrimary,
-                        cursorColor = GoldPrimary,
-                        unfocusedTextColor = White,
-                        focusedTextColor = White
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (commentText.isNotBlank()) GoldPrimary else White.copy(alpha = 0.1f))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
+                        // ── Divider + comments ────────────────────────────────
+                        Spacer(Modifier.height(24.dp))
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            color = LightGray
+                        )
+                        Spacer(Modifier.height(20.dp))
+
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            if (commentText.isNotBlank()) {
-                                viewModel.addComment(token, post.id, commentText)
-                                commentText = ""
-                                showComments = true
+                            Text(
+                                text = "Comments",
+                                color = NavyDark,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            if (viewModel.comments.isNotEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(NavyDark.copy(alpha = 0.08f), RoundedCornerShape(50.dp))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = viewModel.comments.size.toString(),
+                                        color = NavyDark,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = if (commentText.isNotBlank()) NavyDark else White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        if (viewModel.comments.isEmpty()) {
+                            Text(
+                                text = "No comments yet. Be the first!",
+                                color = MediumGray,
+                                fontSize = 13.sp,
+                                fontStyle = FontStyle.Italic,
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(0.dp)
+                            ) {
+                                viewModel.comments.forEachIndexed { index, comment ->
+                                    PostDetailCommentRow(comment = comment, viewModel = viewModel)
+                                    if (index < viewModel.comments.lastIndex) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(vertical = 14.dp),
+                                            color = LightGray
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(if (token.isNotEmpty()) 90.dp else 28.dp))
+                    }
+
+                    // ─── Sticky comment input bar ─────────────────────────────
+                    if (token.isNotEmpty()) {
+                        HorizontalDivider(color = LightGray)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(White)
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .padding(bottom = navBarBottom.coerceAtLeast(0.dp))
+                                .imePadding(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AudioRecorderButton(
+                                recordedFile = recordedAudio,
+                                onRecordingDone = { recordedAudio = it },
+                                onCleared = { recordedAudio = null },
+                                tintColor = NavyDark
+                            )
+
+                            OutlinedTextField(
+                                value = commentText,
+                                onValueChange = { commentText = it },
+                                placeholder = {
+                                    Text(
+                                        "Add a comment…",
+                                        color = MediumGray,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                maxLines = 3,
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = NavyDark,
+                                    unfocusedBorderColor = LightGray,
+                                    cursorColor = NavyDark,
+                                    focusedTextColor = NavyDark,
+                                    unfocusedTextColor = NavyDark,
+                                    focusedContainerColor = White,
+                                    unfocusedContainerColor = OffWhite
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            val canSend = commentText.isNotBlank() || recordedAudio != null
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(if (canSend) NavyDark else LightGray)
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) {
+                                        if (canSend) {
+                                            viewModel.addComment(token, post.id, commentText, recordedAudio)
+                                            commentText = ""
+                                            recordedAudio = null
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = if (canSend) White else MediumGray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+@Composable
+private fun PostDetailCommentRow(
+    comment: CommentResponse,
+    viewModel: PostDetailViewModel
+) {
+    var username by remember { mutableStateOf("User ${comment.userId}") }
+    var avatarUrl by remember { mutableStateOf<String?>(null) }
+    var isLoadingProfile by remember { mutableStateOf(true) }
+
+    LaunchedEffect(comment.userId) {
+        val profile = viewModel.getPublicProfile(comment.userId)
+        if (profile != null) {
+            username = profile.username
+            avatarUrl = profile.ppurl
+        }
+        isLoadingProfile = false
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        // Avatar
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(LightGray),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoadingProfile) {
+                CircularProgressIndicator(color = GoldPrimary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else if (!avatarUrl.isNullOrBlank() && avatarUrl != "img.jpg") {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Image(
+                    painter = painterResource(R.drawable.ic_logo),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().padding(6.dp)
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = username,
+                color = NavyDark,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(3.dp))
+            if (comment.commentaire.isNotBlank()) {
+                Text(
+                    text = comment.commentaire,
+                    color = NavyDark.copy(alpha = 0.70f),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
+            }
+            if (!comment.audioUrl.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                AudioPlayerBar(
+                    audioUrl = comment.audioUrl,
+                    tintColor = NavyDark,
+                    bgColor = OffWhite,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}

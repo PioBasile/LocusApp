@@ -88,7 +88,12 @@ class MainActivity : ComponentActivity() {
                                     currentUserId = uiState.userId,
                                     isGuest = uiState.token == null,
                                     onNavigate = { currentNav = it },
-                                    onUserClick = onUserClick
+                                    onUserClick = onUserClick,
+                                    onLocationClick = { gps ->
+                                        mapFocusGps = gps
+                                        planningVm.setFocusedGps(gps)
+                                        currentNav = NavDestination.COMPASS
+                                    }
                                 )
                                 NavDestination.ADD -> AddPostScreen(
                                     onNavigate = { currentNav = it },

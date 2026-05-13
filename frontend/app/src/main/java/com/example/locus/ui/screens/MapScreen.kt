@@ -7,21 +7,35 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,16 +47,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.locus.data.remote.SearchPostResult
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
+import com.example.locus.ui.theme.GoldPrimary
+import com.example.locus.ui.theme.MediumGray
+import com.example.locus.ui.theme.OffWhite
+import com.example.locus.utils.formatTimeAgo
 import com.example.locus.utils.parseLatLon
 import com.example.locus.ui.theme.NavyDark
 import com.example.locus.ui.theme.White
@@ -348,13 +371,21 @@ fun MapScreen(
             // Nearby post markers (gold dots)
             nearbyPosts.forEach { post ->
                 val (lat, lon) = post.locGps.parseLatLon() ?: return@forEach
+                val isSelected = planningVm.selectedNearbyPost?.id == post.id
                 key("post_${post.id}") {
                     CircleAnnotation(point = Point.fromLngLat(lon, lat)) {
-                        circleRadius = 10.0
+                        circleRadius = if (isSelected) 14.0 else 10.0
                         circleColor = Color(0xFFC8A032)
-                        circleStrokeWidth = 2.5
+                        circleStrokeWidth = if (isSelected) 3.5 else 2.5
                         circleStrokeColor = Color.White
-                        interactionsState.onClicked { onPostClick(post.id); true }
+                        interactionsState.onClicked {
+                            planningVm.selectNearbyPost(post)
+                            mapViewportState.flyTo(
+                                CameraOptions.Builder().center(Point.fromLngLat(lon, lat)).zoom(15.0).build(),
+                                MapAnimationOptions.mapAnimationOptions { duration(600) }
+                            )
+                            true
+                        }
                     }
                 }
             }
@@ -378,7 +409,7 @@ fun MapScreen(
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, bottom = 168.dp),
+                    .padding(start = 16.dp, bottom = 175.dp),
                 shape = RoundedCornerShape(50.dp),
                 color = White,
                 shadowElevation = 6.dp
@@ -398,6 +429,7 @@ fun MapScreen(
                 }
             }
         }
+
 
         // Plan route FAB — bottom-start, above navbar
         ExtendedFloatingActionButton(
@@ -480,7 +512,141 @@ fun MapScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
+        // Post popup — shown when a gold dot marker is tapped
+        planningVm.selectedNearbyPost?.let { post ->
+            PostMapPopup(
+                post = post,
+                authorName = planningVm.postAuthorNames[post.user_id],
+                onDismiss = { planningVm.selectNearbyPost(null) },
+                onDetails = {
+                    planningVm.selectNearbyPost(null)
+                    onPostClick(post.id)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 82.dp)
+            )
+        }
+
         // Route planning overlay (sheets + detail screen)
         RoutePlanningFlow(viewModel = planningVm, onPostClick = onPostClick)
+    }
+}
+
+@Composable
+private fun PostMapPopup(
+    post: SearchPostResult,
+    authorName: String?,
+    onDismiss: () -> Unit,
+    onDetails: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = White,
+        shadowElevation = 12.dp
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+            ) {
+                AsyncImage(
+                    model = post.imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.20f))
+                )
+                val locationLabel = post.description
+                    .substringAfter("\n---loc:", "")
+                    .substringBefore("\n---tags:")
+                    .trim()
+                    .takeIf { it.isNotBlank() }
+                    ?: post.locNom?.takeIf { it.isNotBlank() }
+                if (locationLabel != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(10.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(locationLabel, color = White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(7.dp)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = White, modifier = Modifier.size(9.dp))
+                }
+            }
+
+            Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = authorName ?: "User ${post.user_id}",
+                        color = NavyDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = formatTimeAgo(post.date),
+                        color = MediumGray,
+                        fontSize = 11.sp
+                    )
+                }
+
+                val caption = post.description
+                    .substringBefore("\n---loc:")
+                    .substringBefore("\n---tags:")
+                    .trim()
+                if (caption.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = caption,
+                        color = NavyDark.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = onDetails,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NavyDark, contentColor = White),
+                    contentPadding = PaddingValues(vertical = 10.dp)
+                ) {
+                    Text("View Details", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                }
+            }
+        }
     }
 }

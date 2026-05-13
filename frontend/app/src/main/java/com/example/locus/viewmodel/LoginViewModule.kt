@@ -3,9 +3,12 @@ package com.example.locus.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.locus.data.remote.FCMTokenRequest
+import com.example.locus.data.remote.RetrofitClient
 import com.example.locus.data.repository.UserRepository
 import com.example.locus.utils.SessionManager
 import com.example.locus.utils.decodeUserIdFromToken
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +36,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             val userId = decodeUserIdFromToken(savedToken)
             _uiState.value = LoginUiState(isSuccess = true, token = savedToken, userId = userId)
             fetchAndSaveUsername(savedToken)
+            registerFCMToken(savedToken)
         }
     }
 
@@ -42,6 +46,14 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = userRepository.getProfile(token)
                 sessionManager.username = profile.username
             } catch (_: Exception) { }
+        }
+    }
+
+    private fun registerFCMToken(jwt: String) {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { fcmToken ->
+            viewModelScope.launch {
+                try { RetrofitClient.api.updateFCMToken(jwt, FCMTokenRequest(fcmToken)) } catch (_: Exception) { }
+            }
         }
     }
 
@@ -57,6 +69,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                 val userId = decodeUserIdFromToken(response.token)
                 sessionManager.token = response.token
                 fetchAndSaveUsername(response.token)
+                registerFCMToken(response.token)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isSuccess = true,
@@ -84,6 +97,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         val userId = decodeUserIdFromToken(newToken)
         sessionManager.token = newToken
         fetchAndSaveUsername(newToken)
+        registerFCMToken(newToken)
         _uiState.value = _uiState.value.copy(
             isSuccess = true,
             token = newToken,

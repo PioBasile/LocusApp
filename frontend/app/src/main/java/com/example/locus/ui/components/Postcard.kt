@@ -48,7 +48,8 @@ fun Postcard(
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
     onDeleted: () -> Unit = {},
-    onUserClick: (Int) -> Unit = {}
+    onUserClick: (Int) -> Unit = {},
+    onLocationClick: ((String) -> Unit)? = null
 ) {
     key(post.id) {
         PostCardContent(
@@ -59,7 +60,8 @@ fun Postcard(
             onCommentClick = onCommentClick,
             onLikeClick = onLikeClick,
             onDeleted = onDeleted,
-            onUserClick = onUserClick
+            onUserClick = onUserClick,
+            onLocationClick = onLocationClick
         )
     }
 }
@@ -74,7 +76,8 @@ private fun PostCardContent(
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
     onDeleted: () -> Unit = {},
-    onUserClick: (Int) -> Unit = {}
+    onUserClick: (Int) -> Unit = {},
+    onLocationClick: ((String) -> Unit)? = null
 ) {
     var authorName by remember { mutableStateOf(post.username ?: "User ${post.userId}") }
     var authorAvatarUrl by remember { mutableStateOf<String?>(null) }
@@ -308,10 +311,19 @@ private fun PostCardContent(
                 }
 
                 if (locationName != null) {
+                    val gps = post.locGps
+                    val clickable = gps != null && onLocationClick != null
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(color = White.copy(alpha = 0.1f), shape = RoundedCornerShape(16.dp))
+                            .then(
+                                if (clickable) Modifier.clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onLocationClick!!(gps!!) }
+                                else Modifier
+                            )
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Icon(imageVector = Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(14.dp))
