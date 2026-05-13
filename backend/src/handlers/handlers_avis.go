@@ -1,12 +1,13 @@
 package handlers
- 
+
 import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
- 
+	"time"
+
 	"backend/lib"
 )
  
@@ -145,4 +146,50 @@ func submitLieuAvis(w http.ResponseWriter, r *http.Request) {
 		"message": "Avis enregistré",
 		"id_avis": avisID,
 	})
+}
+
+// GET /getUserAvis?user_id=<id>
+// Returns all reviews written by a specific user, with the place name included.
+func GetUserAvisHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	if idStr == "" {
+		http.Error(w, "user_id manquant", http.StatusBadRequest)
+		return
+	}
+	userID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "user_id invalide", http.StatusBadRequest)
+		return
+	}
+
+	type UserAvisItem struct {
+		ID          int       `db:"id_avis"  json:"id"`
+		IDLieu      int       `db:"id_lieu"  json:"id_lieu"`
+		NomLieu     string    `db:"nom_lieu" json:"nom_lieu"`
+		Note        int       `db:"note"     json:"note"`
+		Commentaire string    `db:"commentaire" json:"commentaire"`
+		CreatedAt   time.Time `db:"created_at"  json:"created_at"`
+	}
+
+	var avis []UserAvisItem
+	err = db.Select(&avis, `
+		SELECT a.id_avis, a.id_lieu,
+		       COALESCE(l.nom, '') AS nom_lieu,
+		       a.note,
+		       COALESCE(a.commentaire, '') AS commentaire,
+		       a.created_at
+		FROM LieuxAvis a
+		JOIN Lieux l ON l.id_lieu = a.id_lieu
+		WHERE a.usr_id = $1
+		ORDER BY a.created_at DESC`, userID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des avis", http.StatusInternalServerError)
+		return
+	}
+	if avis == nil {
+		avis = []UserAvisItem{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(avis)
 }

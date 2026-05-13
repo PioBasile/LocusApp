@@ -56,6 +56,9 @@ class TravelPathRepository(private val api: ApiService) {
     suspend fun submitLieuAvis(token: String, lieuId: Int, request: LieuAvisCreateRequest): Result<SubmitAvisResponse> =
         runCatching { api.submitLieuAvis(token, lieuId, request) }
 
+    suspend fun getUserAvis(userId: Int): Result<List<UserAvisResponse>> =
+        runCatching { api.getUserAvis(userId) }
+
     // -- Itinerary share -------------------------------------------------------
 
     suspend fun getShareItineraire(id: Int): Result<ShareItineraireResponse> =

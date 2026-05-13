@@ -276,6 +276,9 @@ interface ApiService {
         @Body request: LieuAvisCreateRequest
     ): SubmitAvisResponse
 
+    @GET("/getUserAvis")
+    suspend fun getUserAvis(@Query("user_id") userId: Int): List<UserAvisResponse>
+
     // -- TravelPath / Share (public) --------------------------------
     @GET("/travelPath/itineraires/share")
     suspend fun getShareItineraire(@Query("id") id: Int): ShareItineraireResponse

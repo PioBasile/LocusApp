@@ -2,8 +2,6 @@ package com.example.locus.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,14 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -28,8 +24,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.locus.R
-import com.example.locus.data.remote.PostResponse
+import com.example.locus.data.remote.UserAvisResponse
 import com.example.locus.ui.theme.*
+import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.PublicProfileViewModel
 
 @Composable
@@ -65,7 +62,6 @@ fun PublicProfileScreen(
                 .padding(horizontal = 16.dp)
                 .padding(top = 8.dp, bottom = 24.dp)
         ) {
-            // Back button
             IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -116,6 +112,7 @@ fun PublicProfileScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     PubStatItem(label = "Posts", value = uiState.posts.size.toString())
+                    PubStatItem(label = "Reviews", value = uiState.userAvis.size.toString())
                 }
 
                 // Follow button (hidden for own profile)
@@ -142,43 +139,79 @@ fun PublicProfileScreen(
 
         HorizontalDivider(color = LightGray, thickness = 0.5.dp)
 
-        // -- Posts grid --------------------------------------------
+        // -- Reviews list ------------------------------------------
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(scrollState)
-                .padding(bottom = 16.dp)
+                .padding(horizontal = 14.dp, bottom = 16.dp)
         ) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = NavyDark)
                 }
-            } else if (uiState.posts.isEmpty()) {
+            } else if (uiState.userAvis.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                    Text(text = "No posts yet", color = MediumGray, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                    Text(
+                        text = "No reviews yet",
+                        color = MediumGray,
+                        fontSize = 14.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
                 }
             } else {
-                Column(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    uiState.posts.chunked(3).forEach { rowPosts ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            rowPosts.forEach { post ->
-                                PubPhotoGridItem(
-                                    post = post,
-                                    likeCount = uiState.likeCounts[post.id] ?: 0,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { onPostClick(post.id) }
-                                )
-                            }
-                            repeat(3 - rowPosts.size) { Spacer(modifier = Modifier.weight(1f)) }
-                        }
-                    }
+                Spacer(Modifier.height(12.dp))
+                uiState.userAvis.forEach { avis ->
+                    AvisCard(avis = avis)
+                    Spacer(Modifier.height(10.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AvisCard(avis: UserAvisResponse) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = White,
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = avis.nomLieu,
+                    color = NavyDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = formatTimeAgo(avis.createdAt),
+                    color = MediumGray,
+                    fontSize = 11.sp
+                )
+            }
+            Text(
+                text = "★".repeat(avis.note) + "☆".repeat(5 - avis.note),
+                color = GoldPrimary,
+                fontSize = 14.sp,
+                letterSpacing = 2.sp
+            )
+            if (avis.commentaire.isNotBlank()) {
+                Text(
+                    text = avis.commentaire,
+                    color = NavyDark.copy(alpha = 0.75f),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
             }
         }
     }
@@ -189,37 +222,5 @@ private fun PubStatItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = value, color = White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Text(text = label, color = White.copy(alpha = 0.6f), fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun PubPhotoGridItem(post: PostResponse, likeCount: Int = 0, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
-    Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .border(2.dp, GoldPrimary.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-            .background(LightGray)
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)
-    ) {
-        AsyncImage(
-            model = post.imageUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(5.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 5.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Icon(imageVector = Icons.Filled.FavoriteBorder, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(10.dp))
-            Text(text = likeCount.toString(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        }
     }
 }

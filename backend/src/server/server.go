@@ -62,6 +62,7 @@ func setupRoutes() {
 	// Nouveaux endpoints
 	http.HandleFunc("/weather", handlers.WeatherHandler)
 	http.HandleFunc("/travelPath/lieux/avis", handlers.LieuxAvisHandler)             // GET public / POST auth (dispatch interne)
+	http.HandleFunc("/getUserAvis", handlers.GetUserAvisHandler)                      // GET public — reviews written by a user
 	http.HandleFunc("/travelPath/itineraires/share", handlers.ShareItineraireHandler) // public
 	http.HandleFunc("/travelPath/itineraires/pdf", handlers.ItinerairePDFHandler)     // public
  

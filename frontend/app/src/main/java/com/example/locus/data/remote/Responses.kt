@@ -233,6 +233,15 @@ data class SubmitAvisResponse(
     @SerializedName("id_avis") val idAvis: Int
 )
 
+data class UserAvisResponse(
+    val id: Int,
+    @SerializedName("id_lieu") val idLieu: Int,
+    @SerializedName("nom_lieu") val nomLieu: String,
+    val note: Int,
+    val commentaire: String,
+    @SerializedName("created_at") val createdAt: String
+)
+
 // -- Itinerary share -----------------------------------------------------------
 data class ShareItineraireResponse(
     val id: Int,
