@@ -11,13 +11,14 @@ data class SignupResponse(val message: String)
 data class PostResponse(
     val id: Int,
     val user_id: Int,
-    val groupe: List<Int>,
+    val groupe: List<Int> = emptyList(),
     val description: String,
     @SerializedName("image_url") val imageUrl: String,
     @SerializedName("audio_url") val audioUrl: String? = null,
     val tags: List<String>? = null,
     val date: String,
-    val id_loc: Int? = null
+    val id_loc: Int? = null,
+    @SerializedName("loc_gps") val locGps: String? = null
 )
 
 // -- Profile -------------------------------------------------------------------
@@ -127,7 +128,7 @@ data class LieuResponse(
     val description: String,
     val adresse: String,
     val categorie: String,
-    val gps: String,
+    val gps: String? = null,
     @SerializedName("url_image") val urlImage: String?,
     val note: Float,
     @SerializedName("nb_avis") val nbAvis: Int,
@@ -137,7 +138,7 @@ data class LieuResponse(
     val telephone: String?,
     @SerializedName("id_loc") val idLoc: Int?,
     @SerializedName("distance_km") val distanceKm: Double = 0.0,
-    val photos: List<LieuPhotoResponse> = emptyList()
+    val photos: List<LieuPhotoResponse>? = emptyList()
 )
 
 data class CreateLieuResponse(
@@ -148,31 +149,31 @@ data class CreateLieuResponse(
 
 // -- TravelPath / Itineraries --------------------------------------------------
 data class ItineraireEtapeResponse(
-    val ordre: Int,
-    @SerializedName("id_lieu") val idLieu: Int,
-    @SerializedName("nom_lieu") val nomLieu: String,
-    @SerializedName("adresse_lieu") val adresseLieu: String,
-    @SerializedName("gps_lieu") val gpsLieu: String,
-    val categorie: String,
-    val creneau: String,
-    @SerializedName("duree_minutes") val dureeMinutes: Int,
-    @SerializedName("distance_prev_km") val distancePrevKm: Double,
-    @SerializedName("temps_trajet_min") val tempsTrajMin: Int,
-    val prix: Int,
-    val horaires: String,
-    @SerializedName("url_image") val urlImage: String,
-    val note: Float
+    val ordre: Int = 0,
+    @SerializedName("id_lieu") val idLieu: Int = 0,
+    @SerializedName("nom_lieu") val nomLieu: String? = null,
+    @SerializedName("adresse_lieu") val adresseLieu: String? = null,
+    @SerializedName("gps_lieu") val gpsLieu: String? = null,
+    val categorie: String? = null,
+    val creneau: String? = null,
+    @SerializedName("duree_minutes") val dureeMinutes: Int = 0,
+    @SerializedName("distance_prev_km") val distancePrevKm: Double = 0.0,
+    @SerializedName("temps_trajet_min") val tempsTrajMin: Int = 0,
+    val prix: Int = 0,
+    val horaires: String? = null,
+    @SerializedName("url_image") val urlImage: String? = null,
+    val note: Float = 0f
 )
 
 data class ItineraireResponse(
     val id: Int = 0,
-    val type: String,
-    val nom: String,
-    val etapes: List<ItineraireEtapeResponse>,
-    @SerializedName("budget_total") val budgetTotal: Int,
-    @SerializedName("duree_minutes") val dureeMinutes: Int,
-    @SerializedName("effort_score") val effortScore: Int,
-    @SerializedName("meteo_sensible") val meteoSensible: Boolean,
+    val type: String = "equilibre",
+    val nom: String = "",
+    val etapes: List<ItineraireEtapeResponse> = emptyList(),
+    @SerializedName("budget_total") val budgetTotal: Int = 0,
+    @SerializedName("duree_minutes") val dureeMinutes: Int = 0,
+    @SerializedName("effort_score") val effortScore: Int = 0,
+    @SerializedName("meteo_sensible") val meteoSensible: Boolean = false,
     val resume: String = ""
 )
 
@@ -196,6 +197,54 @@ data class SavedItinResponse(
     @SerializedName("effort_score") val effortScore: Int,
     val itineraire: ItineraireResponse,
     @SerializedName("created_at") val createdAt: String
+)
+
+// -- Weather -------------------------------------------------------------------
+data class WeatherResponse(
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    @SerializedName("temp_c") val tempC: Double = 0.0,
+    @SerializedName("feels_like_c") val feelsLikeC: Double = 0.0,
+    val humidity: Int = 0,
+    @SerializedName("wind_speed_ms") val windSpeedMs: Double = 0.0,
+    @SerializedName("clouds_pct") val cloudsPct: Int = 0,
+    val condition: String = "",
+    val description: String = "",
+    @SerializedName("icon_code") val iconCode: String = "",
+    @SerializedName("is_rain") val isRain: Boolean = false,
+    @SerializedName("is_snow") val isSnow: Boolean = false,
+    @SerializedName("is_good_for_outdoor") val isGoodForOutdoor: Boolean = true,
+    @SerializedName("fetched_at") val fetchedAt: String = ""
+)
+
+// -- Place reviews -------------------------------------------------------------
+data class LieuAvisResponse(
+    val id: Int,
+    @SerializedName("id_lieu") val idLieu: Int,
+    @SerializedName("usr_id") val usrId: Int,
+    val username: String,
+    val note: Int,
+    val commentaire: String,
+    @SerializedName("created_at") val createdAt: String
+)
+
+data class SubmitAvisResponse(
+    val message: String,
+    @SerializedName("id_avis") val idAvis: Int
+)
+
+// -- Itinerary share -----------------------------------------------------------
+data class ShareItineraireResponse(
+    val id: Int,
+    val nom: String,
+    val type: String,
+    val budget: Int,
+    @SerializedName("duree_minutes") val dureeMinutes: Int,
+    @SerializedName("effort_score") val effortScore: Int,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("likes_count") val likesCount: Int,
+    @SerializedName("author_name") val authorName: String,
+    @SerializedName("public_url") val publicUrl: String
 )
 
 // -- Search posts --------------------------------------------------------------

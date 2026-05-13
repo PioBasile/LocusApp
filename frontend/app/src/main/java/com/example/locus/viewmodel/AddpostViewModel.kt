@@ -6,9 +6,13 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.locus.data.remote.GroupDetailResponse
+import com.example.locus.data.remote.LieuResponse
 import com.example.locus.data.remote.MyGroupResponse
+import com.example.locus.data.remote.RetrofitClient
 import com.example.locus.data.repository.GroupRepository
 import com.example.locus.data.repository.PostRepository
+import com.example.locus.data.repository.TravelPathRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +21,8 @@ import java.io.File
 
 class AddPostViewModel(
     private val repository: PostRepository = PostRepository(),
-    private val grprepository: GroupRepository = GroupRepository()
+    private val grprepository: GroupRepository = GroupRepository(),
+    private val travelPathRepository: TravelPathRepository = TravelPathRepository(RetrofitClient.api)
 ) : ViewModel() {
 
     var isLoading by mutableStateOf(false)
@@ -28,6 +33,17 @@ class AddPostViewModel(
 
     var errorMessage by mutableStateOf<String?>(null)
         private set
+
+    var locationSuggestions by mutableStateOf<List<LieuResponse>>(emptyList())
+        private set
+
+    var isSearchingLocations by mutableStateOf(false)
+        private set
+
+    var selectedLieuId by mutableStateOf(1)
+        private set
+
+    private var locationSearchJob: Job? = null
 
     private val _userGroups = MutableStateFlow<List<MyGroupResponse>>(emptyList())
     val userGroups: StateFlow<List<MyGroupResponse>> = _userGroups.asStateFlow()
@@ -59,6 +75,28 @@ class AddPostViewModel(
                 isLoading = false
             }
         }
+    }
+
+    fun searchLocations(q: String) {
+        locationSearchJob?.cancel()
+        if (q.isBlank()) { locationSuggestions = emptyList(); return }
+        locationSearchJob = viewModelScope.launch {
+            isSearchingLocations = true
+            travelPathRepository.getLieux(q = q, limit = 8).fold(
+                onSuccess = { locationSuggestions = it },
+                onFailure = { locationSuggestions = emptyList() }
+            )
+            isSearchingLocations = false
+        }
+    }
+
+    fun selectLieu(lieu: LieuResponse) {
+        selectedLieuId = lieu.idLoc ?: lieu.id
+        locationSuggestions = emptyList()
+    }
+
+    fun clearLocationSuggestions() {
+        locationSuggestions = emptyList()
     }
 
     fun clearMessages() {

@@ -11,6 +11,7 @@ import com.example.locus.data.remote.LieuResponse
 import com.example.locus.data.remote.RetrofitClient
 import com.example.locus.data.remote.SearchPostResult
 import com.example.locus.data.repository.GroupRepository
+import com.example.locus.data.repository.PostRepository
 import com.example.locus.data.repository.TravelPathRepository
 import com.example.locus.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,8 @@ data class ExploreUiState(
 class ExploreViewModel(
     private val groupRepository: GroupRepository = GroupRepository(),
     private val userRepository: UserRepository = UserRepository(),
-    private val travelPathRepository: TravelPathRepository = TravelPathRepository(RetrofitClient.api)
+    private val travelPathRepository: TravelPathRepository = TravelPathRepository(RetrofitClient.api),
+    private val postRepository: PostRepository = PostRepository()
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ExploreUiState())
@@ -57,6 +59,12 @@ class ExploreViewModel(
     val postSearchResults: StateFlow<List<SearchPostResult>> = _postSearchResults.asStateFlow()
 
     var isSearchingPosts by mutableStateOf(false)
+        private set
+
+    var nearbyPostCount by mutableStateOf(0)
+        private set
+
+    var postAuthorNames by mutableStateOf<Map<Int, String>>(emptyMap())
         private set
 
     init {
@@ -177,10 +185,40 @@ class ExploreViewModel(
         viewModelScope.launch {
             isSearchingPosts = true
             travelPathRepository.searchPosts(q = q, limit = 10).fold(
-                onSuccess = { _postSearchResults.value = it.results },
+                onSuccess = { resp -> _postSearchResults.value = resp.results; fetchAuthorNames(resp.results) },
                 onFailure = { _postSearchResults.value = emptyList() }
             )
             isSearchingPosts = false
+        }
+    }
+
+    fun loadNearbyPosts(gps: String) {
+        viewModelScope.launch {
+            travelPathRepository.searchPosts(gps = gps, radiusKm = 5.0, limit = 50).fold(
+                onSuccess = { nearbyPostCount = it.results.size },
+                onFailure = {}
+            )
+        }
+    }
+
+    fun searchNearbyPostsByGps(gps: String) {
+        viewModelScope.launch {
+            isSearchingPosts = true
+            travelPathRepository.searchPosts(gps = gps, radiusKm = 5.0, limit = 50).fold(
+                onSuccess = { resp -> _postSearchResults.value = resp.results; fetchAuthorNames(resp.results) },
+                onFailure = { _postSearchResults.value = emptyList() }
+            )
+            isSearchingPosts = false
+        }
+    }
+
+    private fun fetchAuthorNames(results: List<SearchPostResult>) {
+        viewModelScope.launch {
+            val names = postAuthorNames.toMutableMap()
+            results.map { it.user_id }.distinct().filter { it !in names }.forEach { uid ->
+                try { names[uid] = postRepository.getPublicProfile(uid).username } catch (_: Exception) { }
+            }
+            postAuthorNames = names
         }
     }
 

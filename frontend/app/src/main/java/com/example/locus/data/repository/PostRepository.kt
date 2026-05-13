@@ -146,6 +146,11 @@ class PostRepository {
         return api.deletePost(token, postId)
     }
 
+    // -- Location GPS lookup ---------------------------------------
+    suspend fun getLocationGps(locId: Int): String? {
+        return try { api.getLocation(locId).gps } catch (e: Exception) { null }
+    }
+
     // -- Nearby posts (public) -------------------------------------
     suspend fun getNearbyPosts(gps: String): List<Int> {
         return try {

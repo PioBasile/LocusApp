@@ -32,6 +32,16 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         sessionManager.token?.let { savedToken ->
             val userId = decodeUserIdFromToken(savedToken)
             _uiState.value = LoginUiState(isSuccess = true, token = savedToken, userId = userId)
+            fetchAndSaveUsername(savedToken)
+        }
+    }
+
+    private fun fetchAndSaveUsername(token: String) {
+        viewModelScope.launch {
+            try {
+                val profile = userRepository.getProfile(token)
+                sessionManager.username = profile.username
+            } catch (_: Exception) { }
         }
     }
 
@@ -46,6 +56,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                 val response = userRepository.login(email, password)
                 val userId = decodeUserIdFromToken(response.token)
                 sessionManager.token = response.token
+                fetchAndSaveUsername(response.token)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isSuccess = true,
@@ -72,6 +83,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     fun saveTokenFromSignup(newToken: String) {
         val userId = decodeUserIdFromToken(newToken)
         sessionManager.token = newToken
+        fetchAndSaveUsername(newToken)
         _uiState.value = _uiState.value.copy(
             isSuccess = true,
             token = newToken,

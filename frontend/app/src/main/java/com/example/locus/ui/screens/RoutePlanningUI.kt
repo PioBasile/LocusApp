@@ -1,6 +1,7 @@
 package com.example.locus.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -37,7 +38,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.locus.BuildConfig
 import com.example.locus.data.model.*
+import com.example.locus.data.remote.CreateLieuRequest
+import com.example.locus.data.remote.LieuResponse
+import com.example.locus.data.remote.SavedItinResponse
+import com.example.locus.data.remote.WeatherResponse
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.PlanningState
 import com.example.locus.viewmodel.RoutePlanningViewModel
@@ -84,10 +90,13 @@ fun RoutePlanningFlow(
     viewModel: RoutePlanningViewModel,
     onPostClick: (Int) -> Unit = {}
 ) {
+    val context = LocalContext.current
+
     when (viewModel.state) {
         PlanningState.IDLE -> Unit
         PlanningState.PLANNING -> PreferencesSheet(
             prefs = viewModel.preferences,
+            weather = viewModel.weather,
             onGenerate = { viewModel.generate(it) },
             onDismiss = { viewModel.close() }
         )
@@ -107,17 +116,78 @@ fun RoutePlanningFlow(
             RouteDetailScreen(
                 route = route,
                 isSaved = viewModel.isSaved,
+                savedItineraireId = viewModel.savedItineraireId,
+                isItinLiked = viewModel.isCurrentItinLiked,
                 onSave = { viewModel.toggleSave() },
+                onRegenerate = if (viewModel.canRegenerate) { { viewModel.regenerate() } } else null,
+                onLikeItineraire = { viewModel.toggleItineraireLike() },
+                onShare = {
+                    val id = viewModel.savedItineraireId
+                    if (id > 0) {
+                        viewModel.shareItineraire { url ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, url)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(intent, null))
+                        }
+                    } else {
+                        val text = "Check out my ${route.type.label.lowercase()} route: " +
+                            route.steps.joinToString(" → ") { it.name }
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            putExtra(Intent.EXTRA_TEXT, text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(Intent.createChooser(intent, null))
+                    }
+                },
+                onExportPdf = {
+                    val id = viewModel.savedItineraireId
+                    if (id > 0) {
+                        val uri = Uri.parse("${BuildConfig.API_BASE_URL}travelPath/itineraires/pdf?id=$id")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } else {
+                        Toast.makeText(context, "Save the route first to export PDF", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                navError = viewModel.navRouteError,
                 onBack = { viewModel.backToOptions() },
                 onClose = { viewModel.close() },
-                onStepClick = { lieuId -> viewModel.selectPlace(lieuId) }
+                onStart = { viewModel.startNavigation() },
+                onStepClick = { lieuId, gps -> viewModel.selectPlace(lieuId, gps) }
             )
         }
         PlanningState.PLACE_DETAIL -> PlaceDetailScreen(
             lieuId = viewModel.selectedLieuId,
+            token = viewModel.token,
             onBack = { viewModel.backFromPlace() },
             onPostClick = onPostClick,
             onAddToFavorites = { name -> viewModel.addToFavorites(name) }
+        )
+        PlanningState.SAVED_ROUTES -> SavedRoutesSheet(
+            savedItineraries = viewModel.savedItineraries,
+            onSelectRoute = { viewModel.selectSavedRoute(it) },
+            onExplore = { viewModel.openExploreItins() },
+            onDismiss = { viewModel.close() }
+        )
+        PlanningState.EXPLORE_ITINS -> ExploreItinsSheet(
+            results = viewModel.itinSearchResults,
+            isSearching = viewModel.isSearchingItins,
+            hasToken = viewModel.token.isNotBlank(),
+            onSearch = { q -> viewModel.searchItinsByQuery(q) },
+            onSelectRoute = { viewModel.selectSavedRoute(it) },
+            onBack = { viewModel.openSavedRoutes() },
+            onDismiss = { viewModel.close() }
+        )
+        PlanningState.PLACES -> PlacesSheet(
+            places = viewModel.places,
+            isLoading = viewModel.isLoadingPlaces,
+            hasToken = viewModel.token.isNotBlank(),
+            defaultLat = viewModel.currentLat,
+            defaultLon = viewModel.currentLon,
+            onSelectPlace = { viewModel.selectPlaceFromList(it) },
+            onCreatePlace = { viewModel.createPlace(it) },
+            onDismiss = { viewModel.close() }
         )
     }
 }
@@ -128,6 +198,7 @@ fun RoutePlanningFlow(
 @Composable
 private fun PreferencesSheet(
     prefs: RoutePlanPreferences,
+    weather: WeatherResponse? = null,
     onGenerate: (RoutePlanPreferences) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -261,6 +332,7 @@ private fun PreferencesSheet(
 
             // Weather
             SectionLabel("WEATHER")
+            weather?.let { WeatherWidget(it) }
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(White).border(1.dp, InputBorder, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -474,15 +546,23 @@ private fun RouteOptionCard(
 fun RouteDetailScreen(
     route: RouteOption,
     isSaved: Boolean,
+    savedItineraireId: Int = -1,
+    isItinLiked: Boolean = false,
     onSave: () -> Unit,
+    onLikeItineraire: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onExportPdf: () -> Unit = {},
+    onRegenerate: (() -> Unit)? = null,
+    navError: String? = null,
     onBack: () -> Unit,
     onClose: () -> Unit,
-    onStepClick: (Int) -> Unit = {}
+    onStart: () -> Unit = {},
+    onStepClick: (Int, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val typeColor = route.type.color()
 
-    Box(modifier = Modifier.fillMaxSize().background(OffWhite)) {
+    Box(modifier = Modifier.fillMaxSize().background(OffWhite).statusBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Top bar
             Box(modifier = Modifier.fillMaxWidth().background(White).padding(horizontal = 8.dp, vertical = 8.dp)) {
@@ -546,7 +626,7 @@ fun RouteDetailScreen(
                 Text("Route steps", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NavyDark)
 
                 route.steps.forEachIndexed { index, step ->
-                    StepCard(step = step, number = index + 1, onStepClick = { onStepClick(step.lieuId) })
+                    StepCard(step = step, number = index + 1, onStepClick = { onStepClick(step.lieuId, step.gps) })
                 }
 
                 Spacer(Modifier.height(80.dp))
@@ -559,11 +639,28 @@ fun RouteDetailScreen(
             color = White,
             shadowElevation = 8.dp
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 10.dp, bottom = 14.dp)) {
+                // Start navigation button
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+                ) {
+                    Icon(Icons.Filled.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Start", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                if (navError != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(navError, color = Color(0xFFE53935), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 ActionIconBtn(
                     icon = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.Bookmark,
                     label = if (isSaved) "Saved" else "Save",
@@ -571,29 +668,657 @@ fun RouteDetailScreen(
                     onClick = onSave
                 )
                 ActionIconBtn(
+                    icon = if (isItinLiked) Icons.Filled.Favorite else Icons.Outlined.Favorite,
+                    label = if (isItinLiked) "Liked" else "Like",
+                    tint = when {
+                        isItinLiked -> Color(0xFFE53935)
+                        savedItineraireId > 0 -> NavyDark
+                        else -> InputHint
+                    },
+                    onClick = { if (savedItineraireId > 0) onLikeItineraire() }
+                )
+                ActionIconBtn(
                     icon = Icons.Filled.Share,
                     label = "Share",
                     tint = NavyDark,
-                    onClick = {
-                        val text = "My ${route.type.label} route: " + route.steps.joinToString(" → ") { it.name }
-                        val intent = Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_TEXT, text); type = "text/plain" }
-                        context.startActivity(Intent.createChooser(intent, null))
-                    }
+                    onClick = onShare
                 )
                 ActionIconBtn(
                     icon = Icons.Filled.PictureAsPdf,
                     label = "PDF",
-                    tint = NavyDark,
-                    onClick = { Toast.makeText(context, "PDF export — coming soon", Toast.LENGTH_SHORT).show() }
+                    tint = if (savedItineraireId > 0) NavyDark else InputHint,
+                    onClick = onExportPdf
                 )
-                ActionIconBtn(
-                    icon = Icons.Filled.Refresh,
-                    label = "Regenerate",
-                    tint = NavyDark,
-                    onClick = onBack
+                if (onRegenerate != null) {
+                    ActionIconBtn(
+                        icon = Icons.Filled.Refresh,
+                        label = "Regenerate",
+                        tint = NavyDark,
+                        onClick = onRegenerate
+                    )
+                }
+                }  // Row (icon buttons)
+            }  // Column (start + icons)
+        }
+    }
+}
+
+// --- Navigation start sheet ---------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NavigationStartSheet(
+    currentGps: String,
+    suggestions: List<com.example.locus.data.remote.LieuResponse>,
+    isLoading: Boolean,
+    error: String?,
+    onUseMyPosition: () -> Unit,
+    onSearchQuery: (String) -> Unit,
+    onSelectSuggestion: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(Modifier.width(40.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
+                .background(InputBorder).align(Alignment.CenterHorizontally))
+
+            Text("Where do you start?", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+
+            // Use current position — triggers immediately
+            Button(
+                onClick = { if (!isLoading) onUseMyPosition() },
+                enabled = currentGps.isNotBlank() && !isLoading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = White, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Loading route…", fontWeight = FontWeight.SemiBold)
+                } else {
+                    Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Use my current position", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(modifier = Modifier.weight(1f), color = InputBorder)
+                Text("or start from", color = InputHint, fontSize = 12.sp)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = InputBorder)
+            }
+
+            // Search field — tapping a result triggers immediately
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it; onSearchQuery(it) },
+                    placeholder = { Text("Search an address or place…", color = InputHint) },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = InputHint) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    enabled = !isLoading,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = InputBorder,
+                        focusedBorderColor = Color(0xFF1565C0)
+                    )
                 )
+                if (suggestions.isNotEmpty()) {
+                    Column(modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                        .border(1.dp, InputBorder, RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                        .background(White)
+                    ) {
+                        suggestions.forEach { lieu ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                    ) {
+                                        val g = lieu.gps ?: return@clickable
+                                        query = lieu.nom
+                                        onSelectSuggestion(g)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Filled.Place, contentDescription = null,
+                                    tint = InputHint, modifier = Modifier.size(16.dp))
+                                Column {
+                                    Text(lieu.nom, fontSize = 14.sp, color = NavyDark, fontWeight = FontWeight.Medium)
+                                    Text(lieu.adresse, fontSize = 12.sp, color = InputHint, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            }
+                            HorizontalDivider(color = InputBorder.copy(alpha = 0.5f))
+                        }
+                    }
+                }
+            }
+
+            if (error != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFE53935).copy(alpha = 0.09f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = null,
+                        tint = Color(0xFFE53935), modifier = Modifier.size(16.dp))
+                    Text(error, color = Color(0xFFE53935), fontSize = 13.sp)
+                }
             }
         }
+    }
+}
+
+// --- Saved routes sheet -------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SavedRoutesSheet(
+    savedItineraries: List<SavedItinResponse>,
+    onSelectRoute: (SavedItinResponse) -> Unit,
+    onExplore: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.90f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 20.dp, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(InputBorder).align(Alignment.CenterHorizontally))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("My Routes", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark, modifier = Modifier.weight(1f))
+                TextButton(onClick = onExplore) {
+                    Text("Explore others", color = GoldPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(14.dp))
+                }
+            }
+
+            if (savedItineraries.isEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Outlined.Bookmark, contentDescription = null, tint = InputHint, modifier = Modifier.size(48.dp))
+                        Text("No saved routes yet", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text("Plan a route and save it to see it here.", color = InputHint, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                savedItineraries.forEach { saved ->
+                    SavedItinCard(saved = saved, onClick = { onSelectRoute(saved) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedItinCard(saved: SavedItinResponse, onClick: () -> Unit) {
+    val typeColor = saved.type.toRouteType().color()
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth().clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = onClick
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.clip(RoundedCornerShape(50.dp)).background(typeColor.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Text(saved.type.toRouteType().label, color = typeColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(saved.createdAt.take(10), color = InputHint, fontSize = 11.sp)
+            }
+            Text(
+                saved.nom.ifEmpty { "Route #${saved.id}" },
+                fontWeight = FontWeight.Bold, color = NavyDark, fontSize = 16.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmallPill("${saved.budget}€", Icons.Filled.AttachMoney)
+                SmallPill(saved.dureeMinutes.toHourMin(), Icons.Filled.Schedule)
+                SmallPill("Effort ${saved.effortScore}/5", Icons.Filled.FitnessCenter)
+            }
+        }
+    }
+}
+
+private fun String.toRouteType(): RouteType = when (this) {
+    "economique" -> RouteType.ECONOMIC
+    "equilibre"  -> RouteType.BALANCED
+    else         -> RouteType.COMFORT
+}
+
+// --- Explore itineraries sheet ------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExploreItinsSheet(
+    results: List<SavedItinResponse>,
+    isSearching: Boolean,
+    hasToken: Boolean,
+    onSearch: (String) -> Unit,
+    onSelectRoute: (SavedItinResponse) -> Unit,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.90f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 20.dp, bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(InputBorder).align(Alignment.CenterHorizontally))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = NavyDark, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(4.dp))
+                Text("Explore Routes", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+            }
+
+            if (!hasToken) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = InputHint, modifier = Modifier.size(40.dp))
+                        Text("Log in to explore saved routes", color = InputHint, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = { Text("Search routes...", color = InputHint, fontSize = 13.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = White, focusedContainerColor = White,
+                            unfocusedBorderColor = InputBorder, focusedBorderColor = NavyDark,
+                            unfocusedTextColor = NavyDark, focusedTextColor = NavyDark
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { onSearch(query) },
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(NavyDark)
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = "Search", tint = White)
+                    }
+                }
+
+                if (isSearching) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(32.dp), strokeWidth = 2.5.dp)
+                    }
+                } else if (results.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        Text("Search for routes by name or type.", color = InputHint, fontSize = 13.sp)
+                    }
+                } else {
+                    results.forEach { saved ->
+                        SavedItinCard(saved = saved, onClick = { onSelectRoute(saved) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- Places sheet -------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlacesSheet(
+    places: List<LieuResponse>,
+    isLoading: Boolean,
+    hasToken: Boolean,
+    defaultLat: Double,
+    defaultLon: Double,
+    onSelectPlace: (Int) -> Unit,
+    onCreatePlace: (CreateLieuRequest) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showCreateForm by remember { mutableStateOf(false) }
+    val categories = listOf("restaurant", "bar", "cafe", "musee", "monument", "parc", "shopping", "sport", "hotel", "plage", "autre")
+    var filterCat by remember { mutableStateOf<String?>(null) }
+
+    val filtered = if (filterCat == null) places else places.filter { it.categorie == filterCat }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null
+    ) {
+        if (showCreateForm) {
+            CreatePlaceForm(
+                defaultLat = defaultLat,
+                defaultLon = defaultLon,
+                categories = categories,
+                onSubmit = { req -> onCreatePlace(req); showCreateForm = false },
+                onCancel = { showCreateForm = false }
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.90f)
+                    .padding(top = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(InputBorder).align(Alignment.CenterHorizontally))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Nearby Places", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NavyDark, modifier = Modifier.weight(1f))
+                        if (hasToken) {
+                            IconButton(
+                                onClick = { showCreateForm = true },
+                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(NavyDark)
+                            ) {
+                                Icon(Icons.Filled.Add, contentDescription = "Add place", tint = White, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+
+                // Category filter chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    PlaceFilterChip("All", filterCat == null) { filterCat = null }
+                    categories.forEach { cat ->
+                        PlaceFilterChip(cat.replaceFirstChar { it.uppercase() }, filterCat == cat) { filterCat = cat }
+                    }
+                }
+
+                if (isLoading) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(36.dp), strokeWidth = 2.5.dp)
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 40.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (filtered.isEmpty()) {
+                            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                                Text("No places found nearby.", color = InputHint, fontSize = 13.sp)
+                            }
+                        } else {
+                            filtered.forEach { lieu ->
+                                PlaceListCard(lieu = lieu, onClick = { onSelectPlace(lieu.id) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceListCard(lieu: LieuResponse, onClick: () -> Unit) {
+    val catColor = when (lieu.categorie) {
+        "restaurant", "bar", "cafe" -> Color(0xFFFF7043)
+        "musee"                     -> Color(0xFFAB47BC)
+        "monument", "parc", "autre" -> Color(0xFF42A5F5)
+        else                        -> Color(0xFF26A69A)
+    }
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+        modifier = Modifier.fillMaxWidth().clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = onClick
+        )
+    ) {
+        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)).background(catColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!lieu.urlImage.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current).data(lieu.urlImage).crossfade(true).build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Icon(Icons.Filled.Place, contentDescription = null, tint = catColor, modifier = Modifier.size(24.dp))
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(lieu.nom, fontWeight = FontWeight.Bold, color = NavyDark, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.clip(RoundedCornerShape(50.dp)).background(catColor.copy(alpha = 0.12f)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+                        Text(lieu.categorie.replaceFirstChar { it.uppercase() }, color = catColor, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (lieu.note > 0f) {
+                        Icon(Icons.Filled.Star, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(11.dp))
+                        Text("%.1f".format(lieu.note), color = NavyDark, fontSize = 11.sp)
+                    }
+                    if (lieu.distanceKm > 0.0) {
+                        Text("·", color = InputHint, fontSize = 11.sp)
+                        Text("%.1f km".format(lieu.distanceKm), color = InputHint, fontSize = 11.sp)
+                    }
+                }
+                if (lieu.adresse.isNotBlank()) {
+                    Text(lieu.adresse, color = InputHint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = InputHint, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+// --- Create place form --------------------------------------------------------
+
+@Composable
+private fun CreatePlaceForm(
+    defaultLat: Double,
+    defaultLon: Double,
+    categories: List<String>,
+    onSubmit: (CreateLieuRequest) -> Unit,
+    onCancel: () -> Unit
+) {
+    var nom by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var adresse by remember { mutableStateOf("") }
+    var categorie by remember { mutableStateOf("") }
+    var horaires by remember { mutableStateOf("") }
+    var prix by remember { mutableStateOf("0") }
+    var siteWeb by remember { mutableStateOf("") }
+    var telephone by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.92f)
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(top = 20.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(InputBorder).align(Alignment.CenterHorizontally))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = NavyDark, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(4.dp))
+            Text("Add a Place", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+        }
+
+        FormField("Name *", nom, "e.g. Le Café du Port") { nom = it }
+        FormField("Address", adresse, "Street, city") { adresse = it }
+        FormField("Description", description, "A short description", minLines = 3) { description = it }
+
+        SectionLabel("CATEGORY *")
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            categories.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { cat ->
+                        PlaceFilterChip(
+                            label = cat.replaceFirstChar { it.uppercase() },
+                            selected = categorie == cat,
+                            modifier = Modifier.weight(1f),
+                            onClick = { categorie = cat }
+                        )
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) { FormField("Opening hours", horaires, "e.g. 9h–18h") { horaires = it } }
+            Column(Modifier.weight(1f)) { FormField("Avg price (€)", prix, "0") { prix = it } }
+        }
+        FormField("Website", siteWeb, "https://...") { siteWeb = it }
+        FormField("Phone", telephone, "+33...") { telephone = it }
+
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OffWhite).padding(12.dp)) {
+            Text(
+                "Location: %.4f, %.4f (your current position)".format(defaultLat, defaultLon),
+                color = InputHint, fontSize = 12.sp
+            )
+        }
+
+        Button(
+            onClick = {
+                if (nom.isNotBlank() && categorie.isNotBlank()) {
+                    onSubmit(
+                        CreateLieuRequest(
+                            nom = nom.trim(),
+                            description = description.trim(),
+                            adresse = adresse.trim(),
+                            categorie = categorie,
+                            lat = defaultLat,
+                            lon = defaultLon,
+                            horaires = horaires.trim(),
+                            prix_moyen = prix.toIntOrNull() ?: 0,
+                            site_web = siteWeb.trim(),
+                            telephone = telephone.trim()
+                        )
+                    )
+                }
+            },
+            enabled = nom.isNotBlank() && categorie.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = NavyDark, contentColor = White, disabledContainerColor = NavyDark.copy(alpha = 0.3f))
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Add this place", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        }
+    }
+}
+
+@Composable
+private fun FormField(label: String, value: String, placeholder: String, minLines: Int = 1, onChange: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = NavyDark.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            placeholder = { Text(placeholder, color = InputHint, fontSize = 13.sp) },
+            singleLine = minLines == 1,
+            minLines = minLines,
+            maxLines = if (minLines == 1) 1 else 5,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = White, focusedContainerColor = White,
+                unfocusedBorderColor = InputBorder, focusedBorderColor = NavyDark,
+                unfocusedTextColor = NavyDark, focusedTextColor = NavyDark
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun PlaceFilterChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50.dp))
+            .background(if (selected) NavyDark else White)
+            .border(1.dp, if (selected) NavyDark else InputBorder, RoundedCornerShape(50.dp))
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() }
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = if (selected) White else NavyDark, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 
@@ -663,6 +1388,45 @@ private fun StepCard(step: RouteStep, number: Int, onStepClick: () -> Unit = {})
 }
 
 // --- Small helpers ------------------------------------------------------------
+
+@Composable
+private fun WeatherWidget(weather: WeatherResponse) {
+    val icon = when {
+        weather.isSnow -> Icons.Filled.AcUnit
+        weather.isRain -> Icons.Filled.Umbrella
+        weather.cloudsPct > 70 -> Icons.Filled.Cloud
+        else -> Icons.Filled.WbSunny
+    }
+    val iconColor = when {
+        weather.isSnow -> Color(0xFF90CAF9)
+        weather.isRain -> Color(0xFF42A5F5)
+        weather.cloudsPct > 70 -> InputHint
+        else -> Color(0xFFFFA726)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(OffWhite)
+            .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(28.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${weather.tempC.toInt()}°C · ${weather.description.replaceFirstChar { it.uppercase() }}",
+                color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp
+            )
+            Text(
+                if (weather.isGoodForOutdoor) "Good for outdoor activities" else "Not ideal for outdoors",
+                color = if (weather.isGoodForOutdoor) Color(0xFF66BB6A) else Color(0xFFEF5350),
+                fontSize = 11.sp
+            )
+        }
+    }
+}
 
 @Composable
 private fun MetricChip(value: String, icon: ImageVector, color: Color) {

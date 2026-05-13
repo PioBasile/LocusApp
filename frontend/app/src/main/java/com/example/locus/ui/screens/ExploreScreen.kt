@@ -1,7 +1,13 @@
 package com.example.locus.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,6 +61,7 @@ import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Topbar
 import com.example.locus.ui.theme.*
+import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.ExploreViewModel
 
 @Composable
@@ -63,8 +70,10 @@ fun ExploreScreen(
     currentUserId: Int? = null,
     onNavigate: (NavDestination) -> Unit = {},
     onUserClick: (Int) -> Unit = {},
+    onPostClick: (Int) -> Unit = {},
     viewModel: ExploreViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val uiState = viewModel.uiState
     val topUsers by viewModel.topUsers.collectAsState()
     val followedUserIds by viewModel.followedUserIds.collectAsState()
@@ -72,12 +81,21 @@ fun ExploreScreen(
     val places by viewModel.places.collectAsState()
     val postSearchResults by viewModel.postSearchResults.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    var showingNearbyPosts by remember { mutableStateOf(false) }
+    var currentGps by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
 
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     var notificationIsError by remember { mutableStateOf(false) }
+
+    var locationGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+    }
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
+        locationGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true || perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    }
 
     LaunchedEffect(token) {
         if (token.isNotEmpty()) {
@@ -100,6 +118,33 @@ fun ExploreScreen(
     }
     LaunchedEffect(notificationMessage) {
         if (notificationMessage != null) { delay(2500); notificationMessage = null }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!locationGranted) {
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+    LaunchedEffect(locationGranted) {
+        if (locationGranted) {
+            val client = LocationServices.getFusedLocationProviderClient(context)
+            client.lastLocation.addOnSuccessListener { loc ->
+                if (loc != null) {
+                    currentGps = "${loc.latitude},${loc.longitude}"
+                    viewModel.loadNearbyPosts(currentGps)
+                } else {
+                    client.getCurrentLocation(
+                        com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                        null
+                    ).addOnSuccessListener { freshLoc ->
+                        freshLoc?.let {
+                            currentGps = "${it.latitude},${it.longitude}"
+                            viewModel.loadNearbyPosts(currentGps)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (showCreateDialog) {
@@ -129,6 +174,7 @@ fun ExploreScreen(
                 // Debounced search — fires 400ms after the user stops typing
                 LaunchedEffect(searchQuery) {
                     delay(400)
+                    showingNearbyPosts = false
                     if (searchQuery.isNotBlank()) {
                         viewModel.searchPosts(searchQuery)
                         viewModel.loadPlaces(q = searchQuery)
@@ -252,23 +298,69 @@ fun ExploreScreen(
                     }
                 }
 
-                // -- Post search results (only when searching) ---------
-                if (searchQuery.isNotBlank()) {
+                // -- Post search results / nearby posts ----------------
+                if (searchQuery.isNotBlank() || showingNearbyPosts) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Posts matching \"$searchQuery\"", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (showingNearbyPosts) "Posts near you" else "Posts matching \"$searchQuery\"",
+                            color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f)
+                        )
+                        if (showingNearbyPosts) {
+                            TextButton(onClick = { showingNearbyPosts = false }) {
+                                Text("✕", color = InputHint, fontSize = 13.sp)
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     if (viewModel.isSearchingPosts) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp)) }
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp))
+                        }
                     } else if (postSearchResults.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                             Text("No posts found", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
                         }
                     } else {
                         Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            postSearchResults.forEach { result -> PostSearchCard(result) }
+                            postSearchResults.forEach { result ->
+                                PostSearchCard(
+                                    result = result,
+                                    authorName = viewModel.postAuthorNames[result.user_id],
+                                    onClick = { onPostClick(result.id) }
+                                )
+                            }
                         }
+                    }
+                }
+
+                // -- Nearby posts banner (when idle + location known) --
+                if (searchQuery.isBlank() && !showingNearbyPosts && currentGps.isNotEmpty() && viewModel.nearbyPostCount > 0) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF5F7FF))
+                            .border(1.dp, Color(0xFFE0E4F0), RoundedCornerShape(12.dp))
+                            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                                showingNearbyPosts = true
+                                viewModel.searchNearbyPostsByGps(currentGps)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Icons.Filled.Place, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Posts near you", color = NavyDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("${viewModel.nearbyPostCount} posts within 5 km · tap to explore", color = InputHint, fontSize = 12.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = InputHint, modifier = Modifier.size(16.dp))
                     }
                 }
 
@@ -922,31 +1014,68 @@ private fun PlaceCard(lieu: LieuResponse) {
 // -- Post search result card ---------------------------------------------------
 
 @Composable
-private fun PostSearchCard(result: SearchPostResult) {
+private fun PostSearchCard(result: SearchPostResult, authorName: String?, onClick: () -> Unit = {}) {
+    val caption = result.description
+        .substringBefore("---loc:")
+        .substringBefore("---tags:")
+        .trim()
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = onClick
+        )
     ) {
-        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
             AsyncImage(
                 model = result.imageUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(10.dp))
+                modifier = Modifier
+                    .size(70.dp)
+                    .clip(RoundedCornerShape(10.dp))
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!result.locNom.isNullOrEmpty()) {
-                    Text(result.locNom, color = GoldPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        authorName ?: "User ${result.user_id}",
+                        color = NavyDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        formatTimeAgo(result.date),
+                        color = InputHint,
+                        fontSize = 11.sp
+                    )
                 }
-                Text(result.description, color = NavyDark, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (!result.tags.isNullOrEmpty()) {
-                    Text(result.tags.take(3).joinToString(" · ") { "#$it" }, color = InputHint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (caption.isNotBlank()) {
+                    Text(
+                        caption,
+                        color = NavyDark.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-            }
-            if (result.distanceKm != null) {
-                Text("%.1fkm".format(result.distanceKm), color = InputHint, fontSize = 11.sp)
+                if (result.distanceKm != null) {
+                    Text(
+                        "%.1f km away".format(result.distanceKm),
+                        color = GoldPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

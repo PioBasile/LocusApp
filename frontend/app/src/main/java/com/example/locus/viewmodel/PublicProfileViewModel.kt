@@ -37,7 +37,14 @@ class PublicProfileViewModel(
             _uiState.update { it.copy(isLoading = true, userId = userId) }
             try {
                 supervisorScope {
-                    val profile = postRepository.getPublicProfile(userId)
+                    val profileDeferred = async { postRepository.getPublicProfile(userId) }
+                    val isFollowingDeferred = async {
+                        if (token.isNotEmpty()) {
+                            try { userRepository.getMyFollowing(token).any { it.id == userId } }
+                            catch (_: Exception) { false }
+                        } else false
+                    }
+                    val profile = profileDeferred.await()
                     val posts = profile.posts ?: emptyList()
                     val likeCountsMap = if (token.isNotEmpty()) {
                         posts.map { post -> async { post.id to postRepository.getLikesForPost(token, post.id) } }
@@ -49,7 +56,8 @@ class PublicProfileViewModel(
                             ppurl = profile.ppurl,
                             posts = posts,
                             likeCounts = likeCountsMap,
-                            isLoading = false
+                            isLoading = false,
+                            isFollowing = isFollowingDeferred.await()
                         )
                     }
                 }

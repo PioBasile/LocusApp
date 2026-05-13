@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.locus.data.remote.LieuAvisResponse
 import com.example.locus.ui.theme.*
 import com.example.locus.viewmodel.PlaceDetailViewModel
 
@@ -72,6 +73,7 @@ private fun categoryLabel(cat: String): String = when (cat) {
 @Composable
 fun PlaceDetailScreen(
     lieuId: Int,
+    token: String = "",
     onBack: () -> Unit,
     onPostClick: (Int) -> Unit = {},
     onAddToFavorites: (String) -> Unit = {},
@@ -79,14 +81,19 @@ fun PlaceDetailScreen(
 ) {
     val context = LocalContext.current
 
-    LaunchedEffect(lieuId) { viewModel.load(lieuId) }
+    LaunchedEffect(lieuId) {
+        viewModel.token = token
+        viewModel.load(lieuId)
+    }
 
     val lieu = viewModel.lieu
     val posts = viewModel.posts
+    val avis = viewModel.avis
     val isLoading = viewModel.isLoading
 
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var favAdded by remember { mutableStateOf(false) }
+    var showReviewSheet by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(OffWhite)) {
         if (isLoading && lieu == null) {
@@ -143,7 +150,7 @@ fun PlaceDetailScreen(
                 ) {
                     // ── Hero (photos pager or fallback) ──────────────────────
                     lieu?.let { l ->
-                        val photos = l.photos.sortedBy { it.ordre }
+                        val photos = l.photos.orEmpty().sortedBy { it.ordre }
                         val catColor = categoryColor(l.categorie)
 
                         if (photos.isNotEmpty()) {
@@ -278,7 +285,7 @@ fun PlaceDetailScreen(
                             .fillMaxWidth()
                             .background(White)
                             .padding(horizontal = 20.dp)
-                            .padding(bottom = 32.dp),
+                            .padding(bottom = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         HorizontalDivider(color = InputBorder)
@@ -321,8 +328,173 @@ fun PlaceDetailScreen(
                             }
                         }
                     }
+
+                    // ── Reviews ─────────────────────────────────────────────
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(White)
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 4.dp, bottom = 40.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HorizontalDivider(color = InputBorder)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Reviews (${avis.size})",
+                                color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp
+                            )
+                            if (token.isNotBlank()) {
+                                TextButton(onClick = { showReviewSheet = true }) {
+                                    Icon(
+                                        Icons.Filled.Edit, contentDescription = null,
+                                        modifier = Modifier.size(14.dp), tint = GoldPrimary
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "Write a review", color = GoldPrimary,
+                                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                        if (avis.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(60.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No reviews yet", color = InputHint, fontSize = 13.sp)
+                            }
+                        } else {
+                            avis.take(5).forEach { review -> ReviewCard(review) }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    if (showReviewSheet) {
+        ReviewBottomSheet(
+            onDismiss = { showReviewSheet = false },
+            onSubmit = { note, commentaire ->
+                viewModel.submitAvis(note, commentaire)
+                showReviewSheet = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ReviewCard(review: LieuAvisResponse) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(OffWhite)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                review.username, color = NavyDark, fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp, modifier = Modifier.weight(1f)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(5) { i ->
+                    Icon(
+                        Icons.Filled.Star, contentDescription = null,
+                        tint = if (i < review.note) GoldPrimary else InputBorder,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+        Text(review.commentaire, color = DarkGray, fontSize = 13.sp, lineHeight = 18.sp)
+        Text(review.createdAt.take(10), color = InputHint, fontSize = 10.sp)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewBottomSheet(
+    onDismiss: () -> Unit,
+    onSubmit: (Int, String) -> Unit
+) {
+    var selectedNote by remember { mutableStateOf(0) }
+    var commentaire by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                Modifier.width(40.dp).height(4.dp)
+                    .clip(CircleShape).background(InputBorder)
+                    .align(Alignment.CenterHorizontally)
+            )
+            Text("Write a review", color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(5) { i ->
+                    Box(
+                        modifier = Modifier.size(40.dp).clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) { selectedNote = i + 1 },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.Star, contentDescription = "${i + 1} stars",
+                            tint = if (i < selectedNote) GoldPrimary else InputBorder,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = commentaire,
+                onValueChange = { commentaire = it },
+                placeholder = { Text("Share your experience...", color = InputHint, fontSize = 13.sp) },
+                minLines = 3,
+                maxLines = 6,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = White, focusedContainerColor = White,
+                    unfocusedBorderColor = InputBorder, focusedBorderColor = NavyDark,
+                    unfocusedTextColor = NavyDark, focusedTextColor = NavyDark
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Button(
+                onClick = { if (selectedNote > 0 && commentaire.isNotBlank()) onSubmit(selectedNote, commentaire.trim()) },
+                enabled = selectedNote > 0 && commentaire.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NavyDark, contentColor = White,
+                    disabledContainerColor = NavyDark.copy(alpha = 0.3f)
+                )
+            ) {
+                Text("Submit review", fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

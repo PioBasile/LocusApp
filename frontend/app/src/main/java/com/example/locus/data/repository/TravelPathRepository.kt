@@ -43,6 +43,24 @@ class TravelPathRepository(private val api: ApiService) {
     ): Result<List<SavedItinResponse>> =
         runCatching { api.searchItineraires(token, categories, q) }
 
+    // -- Weather ---------------------------------------------------------------
+
+    suspend fun getWeather(lat: Double, lon: Double): Result<WeatherResponse> =
+        runCatching { api.getWeather(lat, lon) }
+
+    // -- Reviews ---------------------------------------------------------------
+
+    suspend fun getLieuAvis(lieuId: Int): Result<List<LieuAvisResponse>> =
+        runCatching { api.getLieuAvis(lieuId) }
+
+    suspend fun submitLieuAvis(token: String, lieuId: Int, request: LieuAvisCreateRequest): Result<SubmitAvisResponse> =
+        runCatching { api.submitLieuAvis(token, lieuId, request) }
+
+    // -- Itinerary share -------------------------------------------------------
+
+    suspend fun getShareItineraire(id: Int): Result<ShareItineraireResponse> =
+        runCatching { api.getShareItineraire(id) }
+
     // -- Search posts ----------------------------------------------------------
 
     suspend fun searchPosts(

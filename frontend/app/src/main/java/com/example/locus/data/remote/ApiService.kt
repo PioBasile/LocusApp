@@ -258,6 +258,28 @@ interface ApiService {
         @Query("q") q: String? = null
     ): List<SavedItinResponse>
 
+    // -- Weather (public) ------------------------------------------
+    @GET("/weather")
+    suspend fun getWeather(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double
+    ): WeatherResponse
+
+    // -- TravelPath / Reviews (GET public, POST auth) --------------
+    @GET("/travelPath/lieux/avis")
+    suspend fun getLieuAvis(@Query("id") lieuId: Int): List<LieuAvisResponse>
+
+    @POST("/travelPath/lieux/avis")
+    suspend fun submitLieuAvis(
+        @Header("Authorization") token: String,
+        @Query("id") lieuId: Int,
+        @Body request: LieuAvisCreateRequest
+    ): SubmitAvisResponse
+
+    // -- TravelPath / Share (public) --------------------------------
+    @GET("/travelPath/itineraires/share")
+    suspend fun getShareItineraire(@Query("id") id: Int): ShareItineraireResponse
+
     // -- Search posts (public) -------------------------------------
     @GET("/searchPosts")
     suspend fun searchPosts(

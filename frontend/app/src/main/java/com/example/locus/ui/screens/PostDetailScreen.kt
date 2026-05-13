@@ -73,6 +73,7 @@ fun PostDetailScreen(
     postId: Int,
     token: String = "",
     onBack: () -> Unit = {},
+    onLocationClick: ((String) -> Unit)? = null,
     viewModel: PostDetailViewModel = viewModel()
 ) {
     LaunchedEffect(postId) { viewModel.load(postId, token) }
@@ -255,11 +256,20 @@ fun PostDetailScreen(
                             }
                         }
 
-                        // Location pill
-                        if (!location.isNullOrBlank()) {
+                        // Location pill — tappable if GPS resolved from id_loc
+                        if (!location.isNullOrBlank() && !location.equals("debug", ignoreCase = true)) {
+                            val locGps = viewModel.locationGps
                             Row(
                                 modifier = Modifier
                                     .background(White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+                                    .then(
+                                        if (locGps != null && onLocationClick != null)
+                                            Modifier.clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }
+                                            ) { onLocationClick(locGps) }
+                                        else Modifier
+                                    )
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -272,7 +282,7 @@ fun PostDetailScreen(
                                 )
                                 Text(
                                     text = location,
-                                    color = White,
+                                    color = if (locGps != null && onLocationClick != null) GoldPrimary else White,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,

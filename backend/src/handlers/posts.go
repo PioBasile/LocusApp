@@ -400,13 +400,12 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		var authorID int
 		var authorFCM sql.NullString
-		var postDesc string
 		err := db.QueryRow(
-			`SELECT p.id_publicateur, u.fcm_token, p.description
+			`SELECT p.id_publicateur, u.fcm_token
 			 FROM Publications p
 			 JOIN Utilisateurs u ON u.usr_id = p.id_publicateur
 			 WHERE p.id_pub = $1`, capturedPostID,
-		).Scan(&authorID, &authorFCM, &postDesc)
+		).Scan(&authorID, &authorFCM)
 		if err != nil || !authorFCM.Valid || authorFCM.String == "" || authorID == capturedLikerID {
 			return
 		}
@@ -414,7 +413,7 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
 		if err = db.QueryRow(`SELECT username FROM Utilisateurs WHERE usr_id = $1`, capturedLikerID).Scan(&likerUsername); err != nil {
 			return
 		}
-		NotifyLikePush(authorFCM.String, likerUsername, parseCaption(postDesc))
+		NotifyLikePush(authorFCM.String, likerUsername)
 	}()
 
 	w.WriteHeader(http.StatusOK)

@@ -22,11 +22,13 @@ import com.example.locus.ui.screens.PublicProfileScreen
 import com.example.locus.ui.screens.MapScreen
 import com.example.locus.ui.screens.SignupScreen
 import com.example.locus.ui.theme.LocusTheme
+import com.example.locus.viewmodel.RoutePlanningViewModel
 import com.example.locus.viewmodel.UserViewModel
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: UserViewModel by viewModels()
+    private val planningVm: RoutePlanningViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
                 var showSignup by remember { mutableStateOf(false) }
                 var viewingUserId by remember { mutableStateOf<Int?>(null) }
                 var viewingPostId by remember { mutableStateOf<Int?>(null) }
+                var mapFocusGps by remember { mutableStateOf<String?>(null) }
 
                 val onUserClick: (Int) -> Unit = { userId ->
                     if (userId != uiState.userId) viewingUserId = userId
@@ -64,7 +67,13 @@ class MainActivity : ComponentActivity() {
                             viewingPostId != null -> PostDetailScreen(
                                 postId = viewingPostId!!,
                                 token = uiState.token ?: "",
-                                onBack = { viewingPostId = null }
+                                onBack = { viewingPostId = null },
+                                onLocationClick = { gps ->
+                                    viewingPostId = null
+                                    mapFocusGps = gps
+                                    planningVm.setFocusedGps(gps)
+                                    currentNav = NavDestination.COMPASS
+                                }
                             )
                             viewingUserId != null -> PublicProfileScreen(
                                 userId = viewingUserId!!,
@@ -87,13 +96,15 @@ class MainActivity : ComponentActivity() {
                                 )
                                 NavDestination.COMPASS -> MapScreen(
                                     onNavigate = { currentNav = it },
-                                    onPostClick = onPostClick
+                                    onPostClick = onPostClick,
+                                    focusGps = mapFocusGps.also { mapFocusGps = null }
                                 )
                                 NavDestination.EXPLORE -> ExploreScreen(
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
                                     onNavigate = { currentNav = it },
-                                    onUserClick = onUserClick
+                                    onUserClick = onUserClick,
+                                    onPostClick = onPostClick
                                 )
                                 NavDestination.PROFILE -> ProfileScreen(
                                     token = uiState.token ?: "",

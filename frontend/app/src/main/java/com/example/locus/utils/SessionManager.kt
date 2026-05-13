@@ -12,5 +12,12 @@ class SessionManager(context: Context) {
             else prefs.edit().remove("token").apply()
         }
 
+    var username: String?
+        get() = prefs.getString("username", null)
+        set(value) {
+            if (value != null) prefs.edit().putString("username", value).apply()
+            else prefs.edit().remove("username").apply()
+        }
+
     fun clear() = prefs.edit().clear().apply()
 }

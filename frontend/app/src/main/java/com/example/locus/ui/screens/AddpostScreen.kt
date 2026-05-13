@@ -37,8 +37,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.locus.data.remote.LieuResponse
 import com.example.locus.ui.components.AudioPlayerBar
 import com.example.locus.ui.components.AudioRecorderButton
 import com.example.locus.ui.components.BottomNav
@@ -189,13 +191,16 @@ fun AddPostScreen(
                     }
                 }
 
-                // -- Location field ---------------------------------------
-                JournalField(
+                // -- Location field with autocomplete ---------------------
+                LocationAutocompleteField(
                     value = location,
-                    onValueChange = { location = it },
-                    label = "Location",
-                    placeholder = "Where was this?",
-                    leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp)) }
+                    onValueChange = { location = it; viewModel.searchLocations(it) },
+                    suggestions = viewModel.locationSuggestions,
+                    onSuggestionSelected = { lieu ->
+                        location = lieu.nom
+                        viewModel.selectLieu(lieu)
+                    },
+                    onDismiss = { viewModel.clearLocationSuggestions() }
                 )
 
 
@@ -424,7 +429,7 @@ fun AddPostScreen(
                             val fullDescription = "$caption$locPart$tagPart"
 
                             if (imageFile != null) {
-                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = 1, audioFile = recordedAudio, aiTags = aiTagsEnabled, tags = manualTags)
+                                viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = viewModel.selectedLieuId, audioFile = recordedAudio, aiTags = aiTagsEnabled, tags = manualTags)
                             } else {
                                 Toast.makeText(context, "Image error", Toast.LENGTH_SHORT).show()
                             }
@@ -456,6 +461,116 @@ fun AddPostScreen(
 
     BottomNav(selected = NavDestination.ADD, onSelect = onNavigate, modifier = Modifier.align(Alignment.BottomCenter))
     } // end outer Box
+}
+
+@Composable
+private fun LocationAutocompleteField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    suggestions: List<LieuResponse>,
+    onSuggestionSelected: (LieuResponse) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "LOCATION",
+            color = NavyDark.copy(alpha = 0.5f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.sp
+        )
+        Box {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = {
+                    Text(
+                        text = "Where was this?",
+                        color = InputHint,
+                        fontSize = 14.sp,
+                        fontStyle = FontStyle.Italic
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        tint = GoldPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (value.isNotBlank()) {
+                        IconButton(onClick = { onValueChange(""); onDismiss() }) {
+                            Icon(Icons.Filled.Close, contentDescription = null, tint = InputHint, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = White,
+                    focusedContainerColor = White,
+                    unfocusedBorderColor = InputBorder,
+                    focusedBorderColor = NavyDark,
+                    cursorColor = NavyDark,
+                    unfocusedTextColor = NavyDark,
+                    focusedTextColor = NavyDark
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (suggestions.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 60.dp)
+                        .zIndex(10f),
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = 8.dp,
+                    color = White
+                ) {
+                    Column(modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                        suggestions.forEach { lieu ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { onSuggestionSelected(lieu) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Filled.LocationOn,
+                                    contentDescription = null,
+                                    tint = GoldPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = lieu.nom,
+                                        color = NavyDark,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = lieu.adresse,
+                                        color = InputHint,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = InputBorder.copy(alpha = 0.5f))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

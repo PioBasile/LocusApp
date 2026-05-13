@@ -87,7 +87,7 @@ func NotifyGroupMembersPush(groupIDs []int, authorID int, postDescription string
 	}
 }
 
-func NotifyLikePush(recipientFCMToken string, likerUsername string, postCaption string) {
+func NotifyLikePush(recipientFCMToken string, likerUsername string) {
 	ctx := context.Background()
 	client, err := newFirebaseClient(ctx)
 	if err != nil {
@@ -98,8 +98,8 @@ func NotifyLikePush(recipientFCMToken string, likerUsername string, postCaption 
 	message := &messaging.Message{
 		Token: recipientFCMToken,
 		Notification: &messaging.Notification{
-			Title: fmt.Sprintf("%s liked your post", likerUsername),
-			Body:  postCaption,
+			Title: likerUsername,
+			Body:  "liked your post",
 		},
 		Data: map[string]string{
 			"type": "like",

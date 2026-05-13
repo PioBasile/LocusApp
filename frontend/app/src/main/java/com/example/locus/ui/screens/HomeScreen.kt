@@ -135,10 +135,19 @@ fun HomeScreen(
 
                         when {
                             tagsIdx != -1 && locIdx != -1 -> {
-                                caption = rawDesc.substring(0, tagsIdx)
-                                inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length, locIdx)
-                                    .split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                locationName = rawDesc.substring(locIdx + locDelimiter.length).trim()
+                                if (tagsIdx < locIdx) {
+                                    // tags before location
+                                    caption = rawDesc.substring(0, tagsIdx)
+                                    inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length, locIdx)
+                                        .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                    locationName = rawDesc.substring(locIdx + locDelimiter.length).trim()
+                                } else {
+                                    // location before tags (current AddpostScreen format)
+                                    caption = rawDesc.substring(0, locIdx)
+                                    locationName = rawDesc.substring(locIdx + locDelimiter.length, tagsIdx).trim()
+                                    inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length)
+                                        .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                }
                             }
                             tagsIdx != -1 -> {
                                 caption = rawDesc.substring(0, tagsIdx)

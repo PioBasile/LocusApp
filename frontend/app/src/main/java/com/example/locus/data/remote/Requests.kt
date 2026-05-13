@@ -40,3 +40,8 @@ data class CreateLieuRequest(
     val telephone: String = ""
 )
 
+data class LieuAvisCreateRequest(
+    val note: Int,
+    val commentaire: String
+)
+
