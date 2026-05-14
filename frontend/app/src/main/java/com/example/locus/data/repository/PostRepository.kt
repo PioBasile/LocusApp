@@ -6,6 +6,7 @@ import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.PostResponse
 import com.example.locus.data.remote.PublicProfileResponse
 import com.example.locus.data.remote.RetrofitClient
+import com.example.locus.data.remote.SearchPostResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -30,6 +31,27 @@ class PostRepository {
             emptyList()
         }
     }
+
+    suspend fun getPublicPosts(limit: Int = 50): List<PostResponse> {
+        return try {
+            api.searchPosts(limit = limit).results.map { it.toPostResponse() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun SearchPostResult.toPostResponse() = PostResponse(
+        id = id,
+        user_id = user_id,
+        groupe = listOf(0),
+        description = description,
+        imageUrl = imageUrl,
+        audioUrl = audioUrl,
+        tags = tags,
+        date = date,
+        id_loc = id_loc,
+        locGps = locGps
+    )
 
     suspend fun getPublicProfile(userId: Int): PublicProfileResponse {
         return api.getPublicProfile(userId)

@@ -61,6 +61,7 @@ import com.example.locus.data.remote.FollowerResponse
 import com.example.locus.data.remote.LieuResponse
 import com.example.locus.data.remote.SearchPostResult
 import com.example.locus.ui.components.BottomNav
+import com.example.locus.ui.components.GuestLoginPrompt
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Topbar
 import com.example.locus.ui.theme.*
@@ -71,7 +72,9 @@ import com.example.locus.viewmodel.ExploreViewModel
 fun ExploreScreen(
     token: String = "",
     currentUserId: Int? = null,
+    isGuest: Boolean = false,
     onNavigate: (NavDestination) -> Unit = {},
+    onLoginRequest: () -> Unit = {},
     onUserClick: (Int) -> Unit = {},
     onPostClick: (Int) -> Unit = {},
     viewModel: ExploreViewModel = viewModel()
@@ -90,6 +93,9 @@ fun ExploreScreen(
     var joinTargetGroup by remember { mutableStateOf<Group?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showingNearbyPosts by remember { mutableStateOf(false) }
+
+    var showGuestPrompt by remember { mutableStateOf(false) }
+    var guestPromptAction by remember { mutableStateOf("") }
 
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     var notificationIsError by remember { mutableStateOf(false) }
@@ -173,6 +179,14 @@ fun ExploreScreen(
         )
     }
 
+    if (showGuestPrompt) {
+        GuestLoginPrompt(
+            action = guestPromptAction,
+            onDismiss = { showGuestPrompt = false },
+            onLogin = { showGuestPrompt = false; onLoginRequest() }
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(OffWhite)) {
             Topbar()
@@ -225,7 +239,10 @@ fun ExploreScreen(
                         Text(text = "Start your own community around a location and curate the best local secrets", color = White.copy(alpha = 0.7f), fontSize = 13.sp, lineHeight = 18.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(
-                            onClick = { showCreateDialog = true },
+                            onClick = {
+                                if (isGuest) { guestPromptAction = "create communities"; showGuestPrompt = true }
+                                else showCreateDialog = true
+                            },
                             modifier = Modifier.fillMaxWidth().height(46.dp),
                             shape = RoundedCornerShape(50.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary, contentColor = White),
@@ -264,7 +281,11 @@ fun ExploreScreen(
                                     group = group,
                                     viewModel = viewModel,
                                     isJoined = group.id in myGroupIds,
-                                    onJoin = { if (group.isPrivate) joinTargetGroup = group else viewModel.joinGroup(token, group.id) }
+                                    onJoin = {
+                                        if (isGuest) { guestPromptAction = "join groups"; showGuestPrompt = true }
+                                        else if (group.isPrivate) joinTargetGroup = group
+                                        else viewModel.joinGroup(token, group.id)
+                                    }
                                 )
                             }
                         }
@@ -299,7 +320,8 @@ fun ExploreScreen(
                                 isFollowing = user.id in followedUserIds,
                                 showFollowButton = user.id != currentUserId,
                                 onFollowClick = {
-                                    if (user.id in followedUserIds) viewModel.unfollowUser(token, user.id)
+                                    if (isGuest) { guestPromptAction = "follow users"; showGuestPrompt = true }
+                                    else if (user.id in followedUserIds) viewModel.unfollowUser(token, user.id)
                                     else viewModel.followUser(token, user.id)
                                 },
                                 onUserClick = { onUserClick(user.id) }

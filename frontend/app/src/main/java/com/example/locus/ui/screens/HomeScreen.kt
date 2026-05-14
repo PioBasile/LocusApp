@@ -18,6 +18,7 @@ import com.example.locus.data.model.Post
 import com.example.locus.data.remote.MyGroupResponse
 import com.example.locus.ui.components.BottomNav
 import com.example.locus.ui.components.CommentBottomSheet
+import com.example.locus.ui.components.GuestLoginPrompt
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.components.Postcard
 import com.example.locus.ui.components.Topbar
@@ -30,6 +31,7 @@ fun HomeScreen(
     currentUserId: Int? = null,
     isGuest: Boolean = false,
     onNavigate: (NavDestination) -> Unit = {},
+    onLoginRequest: () -> Unit = {},
     onUserClick: (Int) -> Unit = {},
     onLocationClick: ((String) -> Unit)? = null,
     viewModel: HomeViewModel = viewModel()
@@ -44,6 +46,9 @@ fun HomeScreen(
     var selectedPostIdForComments by remember { mutableStateOf<Int?>(null) }
     val currentComments by viewModel.currentComments.collectAsState()
     val isLoadingComments by viewModel.isLoadingComments.collectAsState()
+
+    var showGuestPrompt by remember { mutableStateOf(false) }
+    var guestPromptAction by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         if (token.isNotEmpty()) {
@@ -192,6 +197,11 @@ fun HomeScreen(
                             viewModel = viewModel,
                             currentUserId = currentUserId,
                             token = token,
+                            isGuest = isGuest,
+                            onGuestAction = { action ->
+                                guestPromptAction = action
+                                showGuestPrompt = true
+                            },
                             onCommentClick = {
                                 viewModel.loadCommentsForPost(token, postForUI.id)
                                 selectedPostIdForComments = postForUI.id
@@ -223,6 +233,14 @@ fun HomeScreen(
             onSendComment = { text, audioFile ->
                 viewModel.addComment(token, postId, text, audioFile)
             }
+        )
+    }
+
+    if (showGuestPrompt) {
+        GuestLoginPrompt(
+            action = guestPromptAction,
+            onDismiss = { showGuestPrompt = false },
+            onLogin = { showGuestPrompt = false; onLoginRequest() }
         )
     }
 }

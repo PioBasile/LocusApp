@@ -70,7 +70,11 @@ class HomeViewModel(
 
     fun loadPostsForGroup(token: String, groupId: Int) {
         viewModelScope.launch {
-            val fetchedPosts = postRepository.getPostsByGroup(token, groupId)
+            val fetchedPosts = if (token.isEmpty()) {
+                postRepository.getPublicPosts()
+            } else {
+                postRepository.getPostsByGroup(token, groupId)
+            }
             _posts.value = fetchedPosts
             // Resolve GPS for posts that have a location but no GPS in the response
             val missingIds = fetchedPosts.mapNotNull { it.id_loc }.distinct()

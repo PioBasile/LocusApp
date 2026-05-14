@@ -1,7 +1,10 @@
 package com.example.locus.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -22,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -38,6 +42,7 @@ import com.example.locus.data.model.Post
 import com.example.locus.ui.theme.*
 import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.HomeViewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun Postcard(
@@ -45,6 +50,8 @@ fun Postcard(
     viewModel: HomeViewModel,
     currentUserId: Int? = null,
     token: String = "",
+    isGuest: Boolean = false,
+    onGuestAction: (String) -> Unit = {},
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
     onDeleted: () -> Unit = {},
@@ -57,6 +64,8 @@ fun Postcard(
             viewModel = viewModel,
             currentUserId = currentUserId,
             token = token,
+            isGuest = isGuest,
+            onGuestAction = onGuestAction,
             onCommentClick = onCommentClick,
             onLikeClick = onLikeClick,
             onDeleted = onDeleted,
@@ -73,6 +82,8 @@ private fun PostCardContent(
     viewModel: HomeViewModel,
     currentUserId: Int? = null,
     token: String = "",
+    isGuest: Boolean = false,
+    onGuestAction: (String) -> Unit = {},
     onCommentClick: () -> Unit = {},
     onLikeClick: (Boolean) -> Unit = {},
     onDeleted: () -> Unit = {},
@@ -100,6 +111,21 @@ private fun PostCardContent(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val isMyPost = currentUserId != null && post.userId == currentUserId
+
+    var doubleTapCount by remember { mutableStateOf(0) }
+    var showDoubleTapHeart by remember { mutableStateOf(false) }
+    val heartAlpha by animateFloatAsState(
+        targetValue = if (showDoubleTapHeart) 0.9f else 0f,
+        animationSpec = tween(if (showDoubleTapHeart) 120 else 400),
+        label = "heartAlpha"
+    )
+    LaunchedEffect(doubleTapCount) {
+        if (doubleTapCount > 0) {
+            showDoubleTapHeart = true
+            delay(700)
+            showDoubleTapHeart = false
+        }
+    }
 
     LaunchedEffect(post.id) {
         val profile = viewModel.getPublicProfile(post.userId)
@@ -205,7 +231,8 @@ private fun PostCardContent(
                 if (!isMyPost) {
                     Button(
                         onClick = {
-                            if (isFollowing) viewModel.unfollowUser(token, post.userId)
+                            if (isGuest) onGuestAction("follow users")
+                            else if (isFollowing) viewModel.unfollowUser(token, post.userId)
                             else viewModel.followUser(token, post.userId)
                         },
                         shape = RoundedCornerShape(50.dp),
@@ -262,8 +289,33 @@ private fun PostCardContent(
                     model = post.imageUrl,
                     contentDescription = "Post image",
                     contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().wrapContentHeight().clip(RoundedCornerShape(12.dp))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .clip(RoundedCornerShape(12.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (isGuest) {
+                                        onGuestAction("like posts")
+                                    } else {
+                                        if (token.isNotEmpty() && !isLiked) {
+                                            viewModel.toggleLike(token, post.id, true)
+                                        }
+                                        doubleTapCount++
+                                    }
+                                }
+                            )
+                        }
                 )
+                if (heartAlpha > 0f) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = White.copy(alpha = heartAlpha),
+                        modifier = Modifier.align(Alignment.Center).size(80.dp)
+                    )
+                }
             }
 
             // -- Audio player (if post has voice note) -------------
@@ -287,7 +339,10 @@ private fun PostCardContent(
                     PostActionItem(
                         icon = {
                             IconButton(
-                                onClick = { if (token.isNotEmpty()) viewModel.toggleLike(token, post.id, !isLiked) },
+                                onClick = {
+                                    if (isGuest) onGuestAction("like posts")
+                                    else if (token.isNotEmpty()) viewModel.toggleLike(token, post.id, !isLiked)
+                                },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
@@ -302,7 +357,13 @@ private fun PostCardContent(
                     )
                     PostActionItem(
                         icon = {
-                            IconButton(onClick = onCommentClick, modifier = Modifier.size(24.dp)) {
+                            IconButton(
+                                onClick = {
+                                    if (isGuest) onGuestAction("leave a comment")
+                                    else onCommentClick()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
                                 Icon(Icons.Filled.ChatBubbleOutline, contentDescription = "Comment", tint = GoldPrimary, modifier = Modifier.size(22.dp))
                             }
                         },

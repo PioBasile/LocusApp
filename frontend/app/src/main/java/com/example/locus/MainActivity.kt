@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.locus.ui.components.GuestLoginPrompt
 import com.example.locus.ui.components.NavDestination
 import com.example.locus.ui.screens.AddPostScreen
 import com.example.locus.ui.screens.ExploreScreen
@@ -41,11 +42,29 @@ class MainActivity : ComponentActivity() {
                 var viewingUserId by remember { mutableStateOf<Int?>(null) }
                 var viewingPostId by remember { mutableStateOf<Int?>(null) }
                 var mapFocusGps by remember { mutableStateOf<String?>(null) }
+                val isGuest = uiState.token == null
+                val onLoginRequest: () -> Unit = { viewModel.logout() }
+                var guestNavPromptAction by remember { mutableStateOf<String?>(null) }
 
                 val onUserClick: (Int) -> Unit = { userId ->
                     if (userId != uiState.userId) viewingUserId = userId
                 }
                 val onPostClick: (Int) -> Unit = { postId -> viewingPostId = postId }
+                val onNavigate: (NavDestination) -> Unit = { dest ->
+                    when {
+                        isGuest && dest == NavDestination.ADD -> guestNavPromptAction = "share a post"
+                        isGuest && dest == NavDestination.PROFILE -> guestNavPromptAction = "view your profile"
+                        else -> currentNav = dest
+                    }
+                }
+
+                guestNavPromptAction?.let { action ->
+                    GuestLoginPrompt(
+                        action = action,
+                        onDismiss = { guestNavPromptAction = null },
+                        onLogin = { guestNavPromptAction = null; onLoginRequest() }
+                    )
+                }
 
                 when {
                     !uiState.isSuccess && !showSignup -> LoginScreen(
@@ -67,7 +86,9 @@ class MainActivity : ComponentActivity() {
                             viewingPostId != null -> PostDetailScreen(
                                 postId = viewingPostId!!,
                                 token = uiState.token ?: "",
+                                isGuest = isGuest,
                                 onBack = { viewingPostId = null },
+                                onLoginRequest = onLoginRequest,
                                 onLocationClick = { gps ->
                                     viewingPostId = null
                                     mapFocusGps = gps
@@ -86,8 +107,9 @@ class MainActivity : ComponentActivity() {
                                 NavDestination.HOME -> HomeScreen(
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
-                                    isGuest = uiState.token == null,
-                                    onNavigate = { currentNav = it },
+                                    isGuest = isGuest,
+                                    onNavigate = onNavigate,
+                                    onLoginRequest = onLoginRequest,
                                     onUserClick = onUserClick,
                                     onLocationClick = { gps ->
                                         mapFocusGps = gps
@@ -96,25 +118,27 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 NavDestination.ADD -> AddPostScreen(
-                                    onNavigate = { currentNav = it },
+                                    onNavigate = onNavigate,
                                     token = uiState.token ?: ""
                                 )
                                 NavDestination.COMPASS -> MapScreen(
-                                    onNavigate = { currentNav = it },
+                                    onNavigate = onNavigate,
                                     onPostClick = onPostClick,
                                     focusGps = mapFocusGps.also { mapFocusGps = null }
                                 )
                                 NavDestination.EXPLORE -> ExploreScreen(
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
-                                    onNavigate = { currentNav = it },
+                                    isGuest = isGuest,
+                                    onNavigate = onNavigate,
+                                    onLoginRequest = onLoginRequest,
                                     onUserClick = onUserClick,
                                     onPostClick = onPostClick
                                 )
                                 NavDestination.PROFILE -> ProfileScreen(
                                     token = uiState.token ?: "",
                                     currentUserId = uiState.userId,
-                                    onNavigate = { currentNav = it },
+                                    onNavigate = onNavigate,
                                     onLogout = { viewModel.logout() },
                                     onPostClick = onPostClick
                                 )

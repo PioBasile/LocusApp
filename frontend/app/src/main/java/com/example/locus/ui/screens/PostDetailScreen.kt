@@ -41,6 +41,7 @@ import com.example.locus.R
 import com.example.locus.data.remote.CommentResponse
 import com.example.locus.ui.components.AudioPlayerBar
 import com.example.locus.ui.components.AudioRecorderButton
+import com.example.locus.ui.components.GuestLoginPrompt
 import com.example.locus.ui.theme.*
 import com.example.locus.utils.formatTimeAgo
 import com.example.locus.viewmodel.PostDetailViewModel
@@ -72,7 +73,9 @@ private fun parseDescription(raw: String): ParsedPost {
 fun PostDetailScreen(
     postId: Int,
     token: String = "",
+    isGuest: Boolean = false,
     onBack: () -> Unit = {},
+    onLoginRequest: () -> Unit = {},
     onLocationClick: ((String) -> Unit)? = null,
     viewModel: PostDetailViewModel = viewModel()
 ) {
@@ -84,6 +87,9 @@ fun PostDetailScreen(
     var commentText by remember { mutableStateOf("") }
     var recordedAudio by remember { mutableStateOf<File?>(null) }
     val parsed = remember(post?.description) { parseDescription(post?.description ?: "") }
+
+    var showGuestPrompt by remember { mutableStateOf(false) }
+    var guestPromptAction by remember { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize().background(White)) {
         when {
@@ -218,7 +224,10 @@ fun PostDetailScreen(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     IconButton(
-                                        onClick = { viewModel.toggleLike(token, post.id) },
+                                        onClick = {
+                                            if (isGuest) { guestPromptAction = "like posts"; showGuestPrompt = true }
+                                            else viewModel.toggleLike(token, post.id)
+                                        },
                                         enabled = !viewModel.isLikeInFlight,
                                         modifier = Modifier.size(30.dp)
                                     ) {
@@ -419,11 +428,32 @@ fun PostDetailScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(if (token.isNotEmpty()) 90.dp else 28.dp))
+                        Spacer(Modifier.height(if (!isGuest) 90.dp else 70.dp))
                     }
 
                     // ─── Sticky comment input bar ─────────────────────────────
-                    if (token.isNotEmpty()) {
+                    if (isGuest) {
+                        HorizontalDivider(color = LightGray)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(White)
+                                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                                    guestPromptAction = "leave a comment"
+                                    showGuestPrompt = true
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp)
+                                .padding(bottom = navBarBottom.coerceAtLeast(0.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Sign in to leave a comment…",
+                                color = MediumGray,
+                                fontSize = 13.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            )
+                        }
+                    } else if (token.isNotEmpty()) {
                         HorizontalDivider(color = LightGray)
                         Row(
                             modifier = Modifier
@@ -496,6 +526,14 @@ fun PostDetailScreen(
                 }
             }
         }
+    }
+
+    if (showGuestPrompt) {
+        GuestLoginPrompt(
+            action = guestPromptAction,
+            onDismiss = { showGuestPrompt = false },
+            onLogin = { showGuestPrompt = false; onLoginRequest() }
+        )
     }
 }
 
