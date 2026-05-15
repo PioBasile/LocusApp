@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -225,6 +226,48 @@ fun ExploreScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
                 )
 
+                // -- Search post results (shown directly below search bar)
+                if (searchQuery.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Posts matching \"$searchQuery\"",
+                            color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear search", tint = MediumGray, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    if (viewModel.isSearchingPosts) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp))
+                        }
+                    } else if (postSearchResults.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                            Text("No posts found", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
+                        }
+                    } else {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            postSearchResults.forEach { result ->
+                                PostSearchCard(
+                                    result = result,
+                                    authorName = viewModel.postAuthorNames[result.user_id],
+                                    onClick = { onPostClick(result.id) }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
                 // -- Create group banner -------------------------------
                 Box(
                     modifier = Modifier
@@ -326,36 +369,6 @@ fun ExploreScreen(
                                 },
                                 onUserClick = { onUserClick(user.id) }
                             )
-                        }
-                    }
-                }
-
-                // -- Search post results (text search only) -----------
-                if (searchQuery.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "Posts matching \"$searchQuery\"",
-                        color = NavyDark, fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    if (viewModel.isSearchingPosts) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = NavyDark, modifier = Modifier.size(24.dp))
-                        }
-                    } else if (postSearchResults.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                            Text("No posts found", color = MediumGray, fontSize = 13.sp, fontStyle = FontStyle.Italic)
-                        }
-                    } else {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            postSearchResults.forEach { result ->
-                                PostSearchCard(
-                                    result = result,
-                                    authorName = viewModel.postAuthorNames[result.user_id],
-                                    onClick = { onPostClick(result.id) }
-                                )
-                            }
                         }
                     }
                 }
