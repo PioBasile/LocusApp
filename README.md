@@ -2,7 +2,7 @@
 
 **Locus** est une application mobile innovante à la croisée des chemins entre **Instagram** et **Google Maps**. Elle permet aux utilisateurs de capturer des moments en temps réel, de les géolocaliser sur une carte interactive, et de découvrir le monde à travers les yeux de la communauté.
 
-## Technologies Utilisées
+##  Technologies Utilisées
 
 * **Backend :** Go (Golang) - Choisi pour ses performances optimales, sa concurrence native et sa capacité à gérer efficacement des requêtes de géolocalisation intensives.
 * **Frontend :** Kotlin - Utilisé pour garantir une expérience utilisateur Android native, fluide et moderne.
