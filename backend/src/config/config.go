@@ -17,7 +17,7 @@ var DEBUG = "true"
 // Server configuration
 const (
 	ServerHost = "0.0.0.0"
-	ServerPort = "6767"
+	ServerPort = "8080"
 	BaseURL    = "https://mobile.piorian.fr"
 )
 
