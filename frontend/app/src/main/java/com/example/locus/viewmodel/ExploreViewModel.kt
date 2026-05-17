@@ -105,9 +105,12 @@ class ExploreViewModel(
         }
     }
 
+    private val blockedUsernames = setOf("test", "debug_user", "anonyme")
+
     fun loadTopUsers() {
         viewModelScope.launch {
             _topUsers.value = userRepository.getTopUsers(50)
+                .filter { it.username.lowercase() !in blockedUsernames }
         }
     }
 
