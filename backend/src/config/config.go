@@ -18,7 +18,7 @@ var DEBUG = "true"
 const (
 	ServerHost = "0.0.0.0"
 	ServerPort = "8080"
-	BaseURL    = "http://localhost:8080"
+	BaseURL    = "https://mobile.piorian.fr"
 )
 
 // File uploads configuration
