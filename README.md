@@ -96,6 +96,7 @@ Puis ouvrir le projet dans Android Studio et lancer sur un émulateur ou apparei
   &nbsp;&nbsp;
   <img src="images/navigate.png" width="180"/>
 </p>
+
 ---
 
 <p align="center">REY Dorian · BASILE Francesco-Pio · 2026</p>
