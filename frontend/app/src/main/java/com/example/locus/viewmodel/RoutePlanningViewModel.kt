@@ -15,6 +15,9 @@ import com.example.locus.utils.parseLatLon
 import com.mapbox.geojson.Point
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,6 +84,10 @@ class RoutePlanningViewModel : ViewModel() {
         private set
 
     var nearbyPosts by mutableStateOf<List<SearchPostResult>>(emptyList())
+        private set
+
+    // post.id → resolved GPS string; populated asynchronously after loadNearbyPostMarkers
+    var nearbyPostGpsCache by mutableStateOf<Map<Int, String>>(emptyMap())
         private set
 
     var selectedNearbyPost: SearchPostResult? by mutableStateOf(null)
@@ -534,9 +541,63 @@ class RoutePlanningViewModel : ViewModel() {
         if (gps.isBlank()) return
         viewModelScope.launch {
             repo.searchPosts(gps = gps, radiusKm = 5.0, limit = 50).fold(
-                onSuccess = { nearbyPosts = it.results.filter { p -> !p.locGps.isNullOrBlank() } },
+                onSuccess = { resp ->
+                    val posts = resp.results.filter { p ->
+                        !p.locGps.isNullOrBlank() || p.description.contains("\n---loc:")
+                    }
+                    nearbyPosts = posts
+                    resolveNearbyPostGps(posts)
+                },
                 onFailure = {}
             )
+        }
+    }
+
+    // Resolves the correct map GPS for each post:
+    // 1. Use ---gps: embedded in description (new posts)
+    // 2. Look up the ---loc: place name in the Lieux API (existing posts)
+    private fun resolveNearbyPostGps(posts: List<SearchPostResult>) {
+        viewModelScope.launch {
+            val cache = nearbyPostGpsCache.toMutableMap()
+
+            // Pass 1: pick up GPS already embedded in description (new posts)
+            posts.forEach { post ->
+                val embedded = post.description
+                    .substringAfter("\n---gps:", "")
+                    .substringBefore("\n")
+                    .trim()
+                if (embedded.isNotBlank()) cache[post.id] = embedded
+            }
+
+            // Pass 2: for remaining posts, resolve GPS via ---loc: place name lookup
+            val nameToPostIds = posts
+                .filter { it.id !in cache }
+                .groupBy { post ->
+                    post.description
+                        .substringAfter("\n---loc:", "")
+                        .substringBefore("\n---gps:")
+                        .substringBefore("\n---tags:")
+                        .substringBefore("\n")
+                        .trim()
+                }
+                .filterKeys { it.isNotBlank() }
+
+            if (nameToPostIds.isNotEmpty()) {
+                val resolved: List<Pair<String, String>> = coroutineScope {
+                    nameToPostIds.keys.map { name ->
+                        async {
+                            val g = repo.getLieux(q = name, limit = 1).getOrNull()
+                                ?.firstOrNull()?.gps
+                            if (g != null) name to g else null
+                        }
+                    }.awaitAll().filterNotNull()
+                }
+                resolved.forEach { (name, g) ->
+                    nameToPostIds[name]?.forEach { post -> cache[post.id] = g }
+                }
+            }
+
+            nearbyPostGpsCache = cache
         }
     }
 }

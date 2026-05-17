@@ -43,6 +43,9 @@ class AddPostViewModel(
     var selectedLieuId by mutableStateOf(1)
         private set
 
+    var selectedLieuGps by mutableStateOf("")
+        private set
+
     private var locationSearchJob: Job? = null
 
     private val _userGroups = MutableStateFlow<List<MyGroupResponse>>(emptyList())
@@ -98,6 +101,7 @@ class AddPostViewModel(
         // on the map. Fall back to 1 (Debug, Montpellier centre) instead — at least it
         // stays in the right city. The correct name is always in the ---loc: description.
         selectedLieuId = lieu.idLoc ?: 1
+        selectedLieuGps = lieu.gps ?: ""
         locationSuggestions = emptyList()
     }
 

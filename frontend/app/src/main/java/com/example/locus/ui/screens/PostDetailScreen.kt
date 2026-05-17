@@ -58,6 +58,9 @@ private fun parseDescription(raw: String): ParsedPost {
         rest = rest.substring(0, tagsIdx)
         t.split(",").map { it.trim() }.filter { it.isNotBlank() }
     } else emptyList()
+    val gpsMarker = "\n---gps:"
+    val gpsIdx = rest.indexOf(gpsMarker)
+    if (gpsIdx >= 0) rest = rest.substring(0, gpsIdx)
     val locMarker = "\n---loc:"
     val locIdx = rest.indexOf(locMarker)
     val location = if (locIdx >= 0) {

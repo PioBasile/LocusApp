@@ -246,8 +246,9 @@ fun MapScreen(
         )
     }
 
-    val nearbyPosts      = planningVm.nearbyPosts
-    val nearbyPlaces     = planningVm.places
+    val nearbyPosts         = planningVm.nearbyPosts
+    val nearbyPostGpsCache  = planningVm.nearbyPostGpsCache
+    val nearbyPlaces        = planningVm.places
     val focusedPlaceGps  = planningVm.focusedPlaceGps
     val selectedRoute    = planningVm.selectedRoute
     val stepGpsMap       = planningVm.stepGpsMap
@@ -368,9 +369,10 @@ fun MapScreen(
                 }
             }
 
-            // Nearby post markers (gold dots)
+            // Nearby post markers (gold dots) — only rendered once GPS is resolved
             nearbyPosts.forEach { post ->
-                val (lat, lon) = post.locGps.parseLatLon() ?: return@forEach
+                val gpsStr = nearbyPostGpsCache[post.id] ?: return@forEach
+                val (lat, lon) = gpsStr.parseLatLon() ?: return@forEach
                 val isSelected = planningVm.selectedNearbyPost?.id == post.id
                 key("post_${post.id}") {
                     CircleAnnotation(point = Point.fromLngLat(lon, lat)) {
@@ -569,6 +571,7 @@ private fun PostMapPopup(
                 )
                 val locationLabel = post.description
                     .substringAfter("\n---loc:", "")
+                    .substringBefore("\n---gps:")
                     .substringBefore("\n---tags:")
                     .trim()
                     .takeIf { it.isNotBlank() }

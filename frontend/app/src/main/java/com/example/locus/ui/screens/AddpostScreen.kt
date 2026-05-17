@@ -425,8 +425,9 @@ fun AddPostScreen(
                             if (isPublic && !groupsListToPost.contains(0)) groupsListToPost.add(0)
 
                             val locPart = if (location.isNotBlank()) "\n---loc:$location" else ""
+                            val gpsPart = if (viewModel.selectedLieuGps.isNotBlank()) "\n---gps:${viewModel.selectedLieuGps}" else ""
                             val tagPart = if (manualTags.isNotEmpty()) "\n---tags:${manualTags.joinToString(",")}" else ""
-                            val fullDescription = "$caption$locPart$tagPart"
+                            val fullDescription = "$caption$locPart$gpsPart$tagPart"
 
                             if (imageFile != null) {
                                 viewModel.uploadPost(token, imageFile, fullDescription, groupsListToPost, locationId = viewModel.selectedLieuId, audioFile = recordedAudio, aiTags = aiTagsEnabled, tags = manualTags)

@@ -150,7 +150,8 @@ fun HomeScreen(
                                 } else {
                                     // location before tags (current AddpostScreen format)
                                     caption = rawDesc.substring(0, locIdx)
-                                    locationName = rawDesc.substring(locIdx + locDelimiter.length, tagsIdx).trim()
+                                    val locRaw = rawDesc.substring(locIdx + locDelimiter.length, tagsIdx)
+                                    locationName = locRaw.substringBefore("\n---gps:").trim()
                                     inlineTags = rawDesc.substring(tagsIdx + tagsDelimiter.length)
                                         .split(",").map { it.trim() }.filter { it.isNotBlank() }
                                 }
@@ -164,7 +165,8 @@ fun HomeScreen(
                             locIdx != -1 -> {
                                 caption = rawDesc.substring(0, locIdx)
                                 inlineTags = emptyList()
-                                locationName = rawDesc.substring(locIdx + locDelimiter.length).trim()
+                                locationName = rawDesc.substring(locIdx + locDelimiter.length)
+                                    .substringBefore("\n---gps:").trim()
                             }
                             else -> {
                                 caption = rawDesc
