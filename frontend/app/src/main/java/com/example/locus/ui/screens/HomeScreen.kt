@@ -178,7 +178,16 @@ fun HomeScreen(
                         val serverTags = postResponse.tags?.filter { it.isNotBlank() } ?: emptyList()
                         val allTags = (inlineTags + serverTags).distinct().takeIf { it.isNotEmpty() }
 
-                        val resolvedGps = postResponse.id_loc?.let { viewModel.locationGpsCache[it] }
+                        // Prefer the GPS embedded in the description (exact place coords, set at
+                        // post-creation time). Fall back to the Localisation cache only when
+                        // missing — the cache can point to the wrong row for places whose
+                        // idLoc was null and defaulted to location 1 (Montpellier centre).
+                        val embeddedGps = rawDesc
+                            .substringAfter("\n---gps:", "")
+                            .substringBefore("\n")
+                            .trim()
+                            .takeIf { it.isNotBlank() }
+                        val resolvedGps = embeddedGps ?: postResponse.id_loc?.let { viewModel.locationGpsCache[it] }
                         val postForUI = Post(
                             id = postResponse.id,
                             userId = postResponse.user_id,
